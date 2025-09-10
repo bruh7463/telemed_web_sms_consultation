@@ -23,10 +23,12 @@ app.use(cookieParser());
 
 // --- API ROUTES ---
 app.use('/api/auth', require('./routes/auth_routes'));
+app.use('/api/admin', require('./routes/admin_routes'));
 app.use('/api/consultations', require('./routes/consultations'));
 app.use('/api/sms', require('./routes/sms'));
 app.use('/api/doctors', require('./routes/doctor_routes'));
 app.use('/api/patients', require('./routes/patient_routes'));
+app.use('/api/prescriptions', require('./routes/prescriptions'));
 
 // --- REMINDER SERVICE ---
 require('./services/reminders');

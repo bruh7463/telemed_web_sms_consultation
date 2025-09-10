@@ -5,7 +5,7 @@ const LoginPage = () => {
     const [formData, setFormData] = useState({ email: '', password: '' }); 
     const [error, setError] = useState(''); 
     const [isLoading, setIsLoading] = useState(false); 
-    const { login } = useContext(AuthContext); 
+    const { loginDoctor } = useContext(AuthContext);
 
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value }); 
 
@@ -15,7 +15,7 @@ const LoginPage = () => {
         setIsLoading(true); 
         try {
             // Call the login function provided by AuthContext, which handles the API call and state update
-            await login(formData); 
+            await loginDoctor(formData);
             // If login() throws an error, it will be caught below
         } catch (err) {
             setError(err.message || 'Login failed. Please check your credentials.'); // Display error from login function

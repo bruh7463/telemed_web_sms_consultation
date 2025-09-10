@@ -6,7 +6,7 @@ const router = express.Router();
 const { Patient, Consultation, TemporaryBookingReference } = require('../models/db');
 const { detectIntent } = require('../services/dialogflow');
 const { sendSms } = require('../services/textbee_sms')
-const { createAndScheduleConsultation, bookConsultationSlot } = require('../logic/logic');
+const { createAndScheduleConsultation, bookConsultationSlot, cancelAppointment, rescheduleAppointment, getUpcomingAppointments } = require('../logic/logic');
 const dialogflow = require('@google-cloud/dialogflow');
 const client = new dialogflow.ContextsClient();
 
@@ -36,7 +36,12 @@ router.post('/incoming', async (req, res) => {
             return res.status(200).send('Empty or invalid message ignored.');
         }
 
-        console.log(`Incoming SMS from ${from}: "${content}"`); 
+        console.log(`📨 Incoming SMS from ${from}: "${content}"`);
+
+        // Add test mode logging
+        if (process.env.NODE_ENV === 'test' || process.env.SMS_TEST_MODE === 'true') {
+            console.log('🧪 TEST MODE: Processing SMS without actual sending');
+        }
 
         let patient = await Patient.findOne({ phoneNumber: from });
         if (!patient) {
@@ -48,6 +53,182 @@ router.post('/incoming', async (req, res) => {
         if (!patient.dialogflowSessionId) {
             patient.dialogflowSessionId = `projects/${process.env.DIALOGFLOW_PROJECT_ID}/agent/sessions/${patient._id}`;
             await patient.save();
+        }
+
+        // --- CHECK FOR APPOINTMENT MANAGEMENT KEYWORDS FIRST ---
+        const lowerContent = content.toLowerCase().trim();
+        const TEXTBEE_SENDER_ID = process.env.TEXTBEE_SENDER_ID;
+
+        // Handle appointment management keywords (these should work even during active consultations)
+        if (lowerContent.includes('cancel appointment') || lowerContent.includes('cancel my appointment')) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+            if (upcomingAppointments.length === 0) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'You have no upcoming appointments to cancel.');
+                return res.status(200).send('SMS processed: No appointments to cancel.');
+            }
+
+            if (upcomingAppointments.length === 1) {
+                // Cancel the only appointment
+                await cancelAppointment(patient, upcomingAppointments[0]._id);
+                return res.status(200).send('SMS processed: Appointment cancelled.');
+            } else {
+                // Multiple appointments - ask which one
+                let message = 'You have multiple upcoming appointments:\n';
+                upcomingAppointments.forEach((appt, index) => {
+                    message += `${index + 1}. ${new Date(appt.scheduledStart).toLocaleString()} with Dr. ${appt.doctor.name}\n`;
+                });
+                message += 'Reply with "cancel 1", "cancel 2", etc. to cancel a specific appointment.';
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Multiple appointments found.');
+            }
+        }
+
+        // Handle specific cancellation by number
+        const cancelMatch = lowerContent.match(/cancel\s+(\d+)/);
+        if (cancelMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const appointmentIndex = parseInt(cancelMatch[1]) - 1;
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+
+            if (appointmentIndex >= 0 && appointmentIndex < upcomingAppointments.length) {
+                await cancelAppointment(patient, upcomingAppointments[appointmentIndex]._id);
+                return res.status(200).send('SMS processed: Appointment cancelled.');
+            } else {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid appointment number. Please check your upcoming appointments.');
+                return res.status(200).send('SMS processed: Invalid appointment number.');
+            }
+        }
+
+        // Handle reschedule requests
+        if (lowerContent.includes('reschedule') || lowerContent.includes('change') || lowerContent.includes('move appointment')) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+            if (upcomingAppointments.length === 0) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'You have no upcoming appointments to reschedule.');
+                return res.status(200).send('SMS processed: No appointments to reschedule.');
+            }
+
+            if (upcomingAppointments.length === 1) {
+                // Show available slots for rescheduling
+                await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel and book a new appointment.');
+                return res.status(200).send('SMS processed: Reschedule request noted.');
+            } else {
+                // Multiple appointments - ask which one
+                let message = 'You have multiple upcoming appointments:\n';
+                upcomingAppointments.forEach((appt, index) => {
+                    message += `${index + 1}. ${new Date(appt.scheduledStart).toLocaleString()} with Dr. ${appt.doctor.name}\n`;
+                });
+                message += 'Please specify which appointment you want to reschedule by replying with "reschedule 1", "reschedule 2", etc.';
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Multiple appointments found.');
+            }
+        }
+
+        // Handle specific reschedule by number
+        const rescheduleMatch = lowerContent.match(/reschedule\s+(\d+)/);
+        if (rescheduleMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const appointmentIndex = parseInt(rescheduleMatch[1]) - 1;
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+
+            if (appointmentIndex >= 0 && appointmentIndex < upcomingAppointments.length) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel this appointment and book a new one.');
+                return res.status(200).send('SMS processed: Reschedule request noted.');
+            } else {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid appointment number. Please check your upcoming appointments.');
+                return res.status(200).send('SMS processed: Invalid appointment number.');
+            }
+        }
+
+        // Handle appointment status queries
+        if (lowerContent.includes('my appointments') || lowerContent.includes('upcoming') || lowerContent.includes('appointments')) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+            if (upcomingAppointments.length === 0) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'You have no upcoming appointments.');
+                return res.status(200).send('SMS processed: No upcoming appointments.');
+            }
+
+            let message = 'Your upcoming appointments:\n';
+            upcomingAppointments.forEach((appt, index) => {
+                message += `${index + 1}. ${new Date(appt.scheduledStart).toLocaleString()} with Dr. ${appt.doctor.name}\n`;
+            });
+            message += 'Reply with "cancel 1" or "reschedule 1" to manage specific appointments.';
+            await sendSms(from, TEXTBEE_SENDER_ID, message);
+            return res.status(200).send('SMS processed: Appointments listed.');
+        }
+
+        // Handle prescription queries
+        if (lowerContent.includes('my prescriptions') || lowerContent.includes('prescriptions') || lowerContent.includes('medication')) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            // Import Prescription model
+            const { Prescription } = require('../models/db');
+
+            try {
+                const prescriptions = await Prescription.find({ patient: patient._id })
+                    .populate('doctor', 'name')
+                    .sort({ createdAt: -1 })
+                    .limit(5); // Limit to last 5 prescriptions
+
+                if (prescriptions.length === 0) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'You have no prescriptions on record. Please consult with a doctor to get prescriptions.');
+                    return res.status(200).send('SMS processed: No prescriptions found.');
+                }
+
+                let message = `Your recent prescriptions:\n\n`;
+                prescriptions.forEach((prescription, index) => {
+                    message += `${index + 1}. From Dr. ${prescription.doctor.name}\n`;
+                    message += `Diagnosis: ${prescription.diagnosis}\n`;
+                    message += `Medications:\n`;
+
+                    prescription.medications.forEach((med, medIndex) => {
+                        message += `  ${medIndex + 1}. ${med.name} - ${med.dosage}, ${med.frequency}\n`;
+                        if (med.instructions) {
+                            message += `     Instructions: ${med.instructions}\n`;
+                        }
+                    });
+
+                    message += `Date: ${new Date(prescription.createdAt).toLocaleDateString()}\n\n`;
+                });
+
+                // Truncate message if too long for SMS
+                if (message.length > 1000) {
+                    message = message.substring(0, 950) + '...\n\nFor full details, please check your patient dashboard.';
+                }
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Prescriptions sent.');
+
+            } catch (error) {
+                console.error('Error fetching prescriptions:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error retrieving your prescriptions. Please try again later.');
+                return res.status(200).send('SMS processed: Error fetching prescriptions.');
+            }
         }
 
         const existingConsultation = await Consultation.findOne({
@@ -71,8 +252,7 @@ router.post('/incoming', async (req, res) => {
             const intentName = dialogflowResult.intent.displayName;
             const params = dialogflowResult.parameters.fields;
 
-            // Retrieve the TextBee sender ID for outgoing messages
-            const TEXTBEE_SENDER_ID = process.env.TEXTBEE_SENDER_ID;
+            // TEXTBEE_SENDER_ID is already declared above
             if (!TEXTBEE_SENDER_ID) {
                 console.error('TEXTBEE_SENDER_ID environment variable is not set. Outgoing SMS cannot be sent.');
                 // Decide how to handle this gracefully: send generic error, log, etc.

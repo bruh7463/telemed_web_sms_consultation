@@ -199,4 +199,183 @@ async function bookConsultationSlot(patient, doctorId, slotId, reason) {
     }
 }
 
-module.exports = { findAvailableDoctor, createAndScheduleConsultation, bookConsultationSlot };
+/**
+ * Cancels an existing appointment for a patient.
+ * @param {object} patient - The patient Mongoose object.
+ * @param {string} appointmentId - The ID of the appointment to cancel.
+ * @returns {Promise<boolean>} True if cancelled successfully, false otherwise.
+ */
+async function cancelAppointment(patient, appointmentId) {
+    const TEXTBEE_SENDER_ID = process.env.TEXTBEE_SENDER_ID;
+
+    try {
+        const consultation = await Consultation.findOne({
+            _id: appointmentId,
+            patient: patient._id,
+            status: { $in: ['PENDING', 'ACTIVE', 'SCHEDULED'] }
+        });
+
+        if (!consultation) {
+            if (TEXTBEE_SENDER_ID) {
+                await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "Sorry, we couldn't find the appointment you're trying to cancel. Please check your appointment details.");
+            }
+            return false;
+        }
+
+        // Update consultation status to cancelled
+        consultation.status = 'CANCELLED';
+        await consultation.save();
+
+        // Free up the doctor's slot if it was a scheduled appointment
+        if (consultation.status === 'SCHEDULED') {
+            const doctor = await Doctor.findById(consultation.doctor);
+            if (doctor) {
+                const slot = doctor.availability.id(consultation.scheduledStart);
+                if (slot) {
+                    slot.isBooked = false;
+                    await doctor.save();
+                }
+                // Decrease doctor's workload
+                doctor.workload = Math.max(0, (doctor.workload || 0) - 1);
+                await doctor.save();
+            }
+        }
+
+        console.log(`Appointment ${appointmentId} cancelled for patient ${patient.phoneNumber}`);
+
+        const confirmationMessage = `Your appointment with Dr. ${consultation.doctor.name || 'your doctor'} on ${new Date(consultation.scheduledStart).toLocaleString()} has been cancelled.`;
+
+        if (TEXTBEE_SENDER_ID) {
+            await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, confirmationMessage);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error cancelling appointment:', error);
+        if (TEXTBEE_SENDER_ID) {
+            await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "An error occurred while trying to cancel your appointment. Please try again.");
+        }
+        return false;
+    }
+}
+
+/**
+ * Reschedules an existing appointment for a patient.
+ * @param {object} patient - The patient Mongoose object.
+ * @param {string} appointmentId - The ID of the appointment to reschedule.
+ * @param {string} newSlotId - The ID of the new availability slot.
+ * @returns {Promise<boolean>} True if rescheduled successfully, false otherwise.
+ */
+async function rescheduleAppointment(patient, appointmentId, newSlotId) {
+    const TEXTBEE_SENDER_ID = process.env.TEXTBEE_SENDER_ID;
+
+    try {
+        const consultation = await Consultation.findOne({
+            _id: appointmentId,
+            patient: patient._id,
+            status: { $in: ['PENDING', 'ACTIVE', 'SCHEDULED'] }
+        });
+
+        if (!consultation) {
+            if (TEXTBEE_SENDER_ID) {
+                await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "Sorry, we couldn't find the appointment you're trying to reschedule. Please check your appointment details.");
+            }
+            return false;
+        }
+
+        // Find the new slot
+        const newDoctor = await Doctor.findOne({ 'availability._id': newSlotId });
+        if (!newDoctor) {
+            if (TEXTBEE_SENDER_ID) {
+                await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "Sorry, the selected time slot is not available. Please choose another.");
+            }
+            return false;
+        }
+
+        const newSlot = newDoctor.availability.id(newSlotId);
+        if (!newSlot || newSlot.isBooked) {
+            if (TEXTBEE_SENDER_ID) {
+                await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "Sorry, that time slot is no longer available. Please choose another.");
+            }
+            return false;
+        }
+
+        // Free up the old slot if it was scheduled
+        if (consultation.status === 'SCHEDULED') {
+            const oldDoctor = await Doctor.findById(consultation.doctor);
+            if (oldDoctor) {
+                const oldSlot = oldDoctor.availability.id(consultation.scheduledStart);
+                if (oldSlot) {
+                    oldSlot.isBooked = false;
+                    await oldDoctor.save();
+                }
+                // Decrease old doctor's workload
+                oldDoctor.workload = Math.max(0, (oldDoctor.workload || 0) - 1);
+                await oldDoctor.save();
+            }
+        }
+
+        // Book the new slot
+        newSlot.isBooked = true;
+        await newDoctor.save();
+
+        // Update consultation
+        consultation.doctor = newDoctor._id;
+        consultation.scheduledStart = newSlot.startTime;
+        consultation.scheduledEnd = newSlot.endTime;
+        consultation.status = 'SCHEDULED';
+        await consultation.save();
+
+        // Increase new doctor's workload
+        newDoctor.workload = (newDoctor.workload || 0) + 1;
+        await newDoctor.save();
+
+        console.log(`Appointment ${appointmentId} rescheduled for patient ${patient.phoneNumber} to ${newSlot.startTime}`);
+
+        const confirmationMessage = `Your appointment has been rescheduled to ${new Date(newSlot.startTime).toLocaleString()} with Dr. ${newDoctor.name}.`;
+
+        if (TEXTBEE_SENDER_ID) {
+            await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, confirmationMessage);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error rescheduling appointment:', error);
+        if (TEXTBEE_SENDER_ID) {
+            await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, "An error occurred while trying to reschedule your appointment. Please try again.");
+        }
+        return false;
+    }
+}
+
+/**
+ * Gets upcoming appointments for a patient.
+ * @param {object} patient - The patient Mongoose object.
+ * @returns {Promise<Array>} Array of upcoming appointments.
+ */
+async function getUpcomingAppointments(patient) {
+    try {
+        const appointments = await Consultation.find({
+            patient: patient._id,
+            status: { $in: ['PENDING', 'ACTIVE', 'SCHEDULED'] },
+            scheduledStart: { $gte: new Date() }
+        })
+        .populate('doctor', 'name specialty')
+        .sort({ scheduledStart: 1 })
+        .limit(5); // Limit to next 5 appointments
+
+        return appointments;
+    } catch (error) {
+        console.error('Error getting upcoming appointments:', error);
+        return [];
+    }
+}
+
+module.exports = { 
+    findAvailableDoctor, 
+    createAndScheduleConsultation, 
+    bookConsultationSlot,
+    cancelAppointment,
+    rescheduleAppointment,
+    getUpcomingAppointments
+};

@@ -19,6 +19,7 @@ const patientSchema = new mongoose.Schema({
     phoneNumber: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     nrc: { type: String, required: true, unique: true, sparse: true },
+    password: { type: String },
     dateOfBirth: { type: Date, required: false },
     gender: { type: String, enum: ['male', 'female'], required: false },
     address: { type: String, required: false },
@@ -79,5 +80,66 @@ const temporaryBookingReferenceSchema = new mongoose.Schema({
 temporaryBookingReferenceSchema.index({ "references.expiresAt": 1 }, { expireAfterSeconds: 0 });
 const TemporaryBookingReference = mongoose.model('TemporaryBookingReference', temporaryBookingReferenceSchema);
 
+// Prescription Schema
+const prescriptionSchema = new mongoose.Schema({
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
+    doctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true },
+    consultation: { type: mongoose.Schema.Types.ObjectId, ref: 'Consultation' },
 
-module.exports = { connectDB, Patient, Doctor, Consultation, TemporaryBookingReference };
+    // Prescription details
+    medications: [{
+        name: { type: String, required: true },
+        dosage: { type: String, required: true },
+        frequency: { type: String, required: true },
+        duration: { type: String, required: true },
+        instructions: { type: String }
+    }],
+
+    // Additional prescription info
+    diagnosis: { type: String },
+    notes: { type: String },
+    allergies: { type: String },
+
+    // Status and tracking
+    status: { type: String, enum: ['DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED'], default: 'DRAFT' },
+    smsSent: { type: Boolean, default: false },
+    smsSentAt: { type: Date },
+
+    // Timestamps
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Update prescription when saved
+prescriptionSchema.pre('save', function(next) {
+    this.updatedAt = new Date();
+    next();
+});
+
+const Prescription = mongoose.model('Prescription', prescriptionSchema);
+
+// Admin Schema
+const adminSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    name: { type: String, required: true },
+    role: { type: String, enum: ['super_admin', 'admin', 'moderator'], default: 'admin' },
+    isActive: { type: Boolean, default: true },
+    lastLogin: { type: Date },
+    permissions: [{
+        resource: { type: String, required: true }, // e.g., 'users', 'doctors', 'patients', 'consultations'
+        actions: [{ type: String, enum: ['create', 'read', 'update', 'delete'] }] // CRUD permissions
+    }],
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Update admin when saved
+adminSchema.pre('save', function(next) {
+    this.updatedAt = new Date();
+    next();
+});
+
+const Admin = mongoose.model('Admin', adminSchema);
+
+module.exports = { connectDB, Patient, Doctor, Consultation, TemporaryBookingReference, Prescription, Admin };
