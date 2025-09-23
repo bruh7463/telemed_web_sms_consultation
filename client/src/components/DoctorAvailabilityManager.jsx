@@ -16,10 +16,14 @@ const DoctorAvailabilityManager = () => {
     const [addingSlot, setAddingSlot] = useState(false);
 
     useEffect(() => {
-        fetchAvailability();
+        loadAvailability();
+        // Start polling for availability updates (silent)
+        const pollInterval = setInterval(pollAvailability, 10000); // Poll every 10 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
     }, []);
 
-    const fetchAvailability = async () => {
+    const loadAvailability = async () => {
         setLoading(true);
         setError('');
         try {
@@ -32,6 +36,19 @@ const DoctorAvailabilityManager = () => {
             setError('Failed to load availability. Please try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const pollAvailability = async () => {
+        try {
+            // Silent polling - no loading states or error messages
+            const res = await api.get('/doctors/availability');
+            // Sort by start time for better readability
+            const sortedAvailability = res.data.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+            setAvailability(sortedAvailability);
+        } catch (err) {
+            // Silent error handling - don't interrupt user experience
+            console.debug('Silent availability polling failed:', err.message);
         }
     };
 
@@ -59,7 +76,8 @@ const DoctorAvailabilityManager = () => {
             });
             // Clear form and reset to default values
             setNewSlot({ startDateTime: '', endDateTime: '', duration: 30, bufferTime: 10 });
-            await fetchAvailability(); // Refresh the list
+            // Immediately refresh data to ensure sync
+            await pollAvailability();
         } catch (err) {
             console.error('Failed to add availability slot:', err.response?.data?.message || err.message);
             setError(err.response?.data?.message || 'Failed to add slot. Please check your input.');
@@ -71,7 +89,8 @@ const DoctorAvailabilityManager = () => {
     const handleDeleteSlot = async (slotId) => {
         try {
             await api.delete(`/doctors/availability/${slotId}`);
-            fetchAvailability(); // Refresh the list after deletion
+            // Immediately refresh data to ensure sync
+            await pollAvailability();
         } catch (err) {
             console.error('Failed to delete slot:', err.response?.data?.message || err.message);
             setError(err.response?.data?.message || 'Failed to delete slot.');
@@ -106,75 +125,80 @@ const DoctorAvailabilityManager = () => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto my-8 font-inter">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-                <FiCalendar className="mr-3 text-blue-600" /> Manage Your Availability
-            </h2>
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+                    <FiCalendar className="mr-3 text-green-600" /> Availability Management
+                </h1>
+            </div>
 
-            {error && <p className="text-red-600 bg-red-100 p-3 rounded-md mb-4">{error}</p>}
+            {error && <p className="text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
 
-            <form onSubmit={handleAddSlot} className="mb-8 p-4 border border-gray-200 rounded-md bg-gray-50">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New Availability Slot</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label htmlFor="startDateTime" className="block text-sm font-medium text-gray-700">Start Date & Time</label>
-                        <input
-                            type="datetime-local"
-                            id="startDateTime"
-                            name="startDateTime"
-                            value={newSlot.startDateTime}
-                            onChange={handleInputChange}
-                            required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h2 className="text-xl font-semibold mb-4">Add New Availability Slot</h2>
+
+                <form onSubmit={handleAddSlot} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="startDateTime" className="block text-sm font-medium text-gray-700">Start Date & Time</label>
+                            <input
+                                type="datetime-local"
+                                id="startDateTime"
+                                name="startDateTime"
+                                value={newSlot.startDateTime}
+                                onChange={handleInputChange}
+                                required
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="endDateTime" className="block text-sm font-medium text-gray-700">End Date & Time</label>
+                            <input
+                                type="datetime-local"
+                                id="endDateTime"
+                                name="endDateTime"
+                                value={newSlot.endDateTime}
+                                onChange={handleInputChange}
+                                required
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Slot Duration (minutes)</label>
+                            <input
+                                type="number"
+                                id="duration"
+                                name="duration"
+                                value={newSlot.duration}
+                                onChange={handleInputChange}
+                                required
+                                min="1"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="bufferTime" className="block text-sm font-medium text-gray-700">Buffer Time (minutes)</label>
+                            <input
+                                type="number"
+                                id="bufferTime"
+                                name="bufferTime"
+                                value={newSlot.bufferTime}
+                                onChange={handleInputChange}
+                                required
+                                min="0"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label htmlFor="endDateTime" className="block text-sm font-medium text-gray-700">End Date & Time</label>
-                        <input
-                            type="datetime-local"
-                            id="endDateTime"
-                            name="endDateTime"
-                            value={newSlot.endDateTime}
-                            onChange={handleInputChange}
-                            required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Slot Duration (minutes)</label>
-                        <input
-                            type="number"
-                            id="duration"
-                            name="duration"
-                            value={newSlot.duration}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="bufferTime" className="block text-sm font-medium text-gray-700">Buffer Time (minutes)</label>
-                        <input
-                            type="number"
-                            id="bufferTime"
-                            name="bufferTime"
-                            value={newSlot.bufferTime}
-                            onChange={handleInputChange}
-                            required
-                            min="0"
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                </div>
-                <button
-                    type="submit"
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center disabled:bg-blue-400"
-                    disabled={addingSlot}
-                >
-                    <FiPlus className="mr-2" /> {addingSlot ? 'Adding...' : 'Add Slot'}
-                </button>
-            </form>
+                    <button
+                        type="submit"
+                        className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-green-400 flex items-center justify-center"
+                        disabled={addingSlot}
+                    >
+                        <FiPlus className="mr-2" /> {addingSlot ? 'Adding...' : 'Add Slot'}
+                    </button>
+                </form>
+            </div>
 
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Your Current Availability</h3>
             {loading ? (

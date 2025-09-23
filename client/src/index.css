@@ -1,3 +1,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Global styles */
+@layer base {
+  * {
+    @apply box-border select-none;
+    letter-spacing: 0.2px;
+  }
+
+  body {
+    @apply bg-neutral-low-white text-primary-font font-sans text-base leading-relaxed;
+  }
+
+  input, button, textarea {
+    @apply font-sans text-base font-normal;
+  }
+
+  button {
+    @apply cursor-pointer border-none outline-none transition-all duration-200;
+  }
+
+  input {
+    @apply border-none outline-none transition-all duration-200;
+  }
+
+  a {
+    @apply no-underline text-inherit;
+  }
+}
+
+/* Custom animations */
+@keyframes blop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-blop {
+  animation: blop linear 0.2s;
+}

@@ -25,7 +25,7 @@ const patientSchema = new mongoose.Schema({
     address: { type: String, required: false },
     consultations: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Consultation' }],
     dialogflowSessionId: { type: String, default: () => uuidv4() },
-});
+}, { timestamps: true });
 const Patient = mongoose.model('Patient', patientSchema);
 
 // Doctor Schema
@@ -42,7 +42,7 @@ const doctorSchema = new mongoose.Schema({
         duration: { type: Number, required: true, default: 30 }, // NEW
         bufferTime: { type: Number, default: 10 }
     }],
-});
+}, { timestamps: true });
 const Doctor = mongoose.model('Doctor', doctorSchema);
 
 // Consultation Schema
@@ -51,9 +51,11 @@ const consultationSchema = new mongoose.Schema({
     doctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true },
     status: { type: String, enum: ['PENDING', 'ACTIVE', 'COMPLETED', 'SCHEDULED'], default: 'PENDING' },
     bookingReason: { type: String },
+    bookingChannel: { type: String, enum: ['frontend', 'sms'], default: 'frontend' }, // Track how consultation was booked
     messages: [{
         sender: { type: String, enum: ['PATIENT', 'DOCTOR'] },
         content: String,
+        channel: { type: String, enum: ['frontend', 'sms'], default: 'frontend' }, // Track message source
         timestamp: { type: Date, default: Date.now }
     }],
     scheduledStart: { type: Date, required: true },

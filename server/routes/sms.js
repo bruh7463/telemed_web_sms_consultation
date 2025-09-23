@@ -3,7 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { Patient, Consultation, TemporaryBookingReference } = require('../models/db');
+const { Patient, Consultation, TemporaryBookingReference, Prescription } = require('../models/db');
 const { detectIntent } = require('../services/dialogflow');
 const { sendSms } = require('../services/textbee_sms')
 const { createAndScheduleConsultation, bookConsultationSlot, cancelAppointment, rescheduleAppointment, getUpcomingAppointments } = require('../logic/logic');
@@ -36,11 +36,11 @@ router.post('/incoming', async (req, res) => {
             return res.status(200).send('Empty or invalid message ignored.');
         }
 
-        console.log(`📨 Incoming SMS from ${from}: "${content}"`);
+        console.log(`Incoming SMS from ${from}: "${content}"`);
 
         // Add test mode logging
         if (process.env.NODE_ENV === 'test' || process.env.SMS_TEST_MODE === 'true') {
-            console.log('🧪 TEST MODE: Processing SMS without actual sending');
+            console.log('TEST MODE: Processing SMS without actual sending');
         }
 
         let patient = await Patient.findOne({ phoneNumber: from });
@@ -186,9 +186,6 @@ router.post('/incoming', async (req, res) => {
                 return res.status(200).send('SMS processed: Patient needs to register first.');
             }
 
-            // Import Prescription model
-            const { Prescription } = require('../models/db');
-
             try {
                 const prescriptions = await Prescription.find({ patient: patient._id })
                     .populate('doctor', 'name')
@@ -212,6 +209,7 @@ router.post('/incoming', async (req, res) => {
                             message += `     Instructions: ${med.instructions}\n`;
                         }
                     });
+                    message += `Notes: ${prescription.notes || 'None'}\n`;
 
                     message += `Date: ${new Date(prescription.createdAt).toLocaleDateString()}\n\n`;
                 });
@@ -239,7 +237,11 @@ router.post('/incoming', async (req, res) => {
         if (existingConsultation) {
             // --- ROUTE TO DOCTOR ---
             console.log(`Message is part of existing consultation ${existingConsultation._id}`);
-            existingConsultation.messages.push({ sender: 'PATIENT', content });
+            existingConsultation.messages.push({
+                sender: 'PATIENT',
+                content,
+                channel: 'sms'  // Mark as coming from SMS
+            });
             if (existingConsultation.status === 'PENDING') {
                 existingConsultation.status = 'ACTIVE';
             }

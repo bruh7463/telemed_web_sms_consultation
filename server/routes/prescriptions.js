@@ -104,6 +104,12 @@ router.get('/', protect, async (req, res) => {
             })
             .populate('patient', 'name phoneNumber')
             .sort({ createdAt: -1 });
+        } else if (req.admin) {
+            // Admin viewing all prescriptions
+            prescriptions = await Prescription.find({})
+            .populate('patient', 'name phoneNumber')
+            .populate('doctor', 'name specialty')
+            .sort({ createdAt: -1 });
         } else {
             return res.status(403).json({ message: 'Access denied' });
         }
@@ -136,6 +142,11 @@ router.get('/:id', protect, async (req, res) => {
         }
 
         if (req.doctor && prescription.doctor._id.toString() !== req.doctor._id.toString()) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        // Admin can view any prescription
+        if (!req.patient && !req.doctor && !req.admin) {
             return res.status(403).json({ message: 'Access denied' });
         }
 

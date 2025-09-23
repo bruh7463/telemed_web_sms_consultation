@@ -22,24 +22,45 @@ const protect = async (req, res, next) => {
 
         // Check user type and set appropriate req property
         if (decoded.type === 'patient') {
-            req.patient = await Patient.findById(decoded.id).select('-password');
-            if (!req.patient) {
-                return res.status(401).json({ message: 'Not authorized, patient not found' });
+            try {
+                req.patient = await Patient.findById(decoded.id).select('-password');
+                if (!req.patient) {
+                    console.error('Patient not found for ID:', decoded.id);
+                    return res.status(401).json({ message: 'Not authorized, patient not found' });
+                }
+                //console.log('Patient authenticated:', req.patient.name);
+            } catch (error) {
+                console.error('Error finding patient:', error);
+                return res.status(500).json({ message: 'Server error during authentication' });
             }
         } else if (decoded.type === 'admin') {
-            req.admin = await Admin.findById(decoded.id).select('-password');
-            if (!req.admin) {
-                return res.status(401).json({ message: 'Not authorized, admin not found' });
-            }
-            // Check if admin account is active
-            if (!req.admin.isActive) {
-                return res.status(401).json({ message: 'Account is deactivated' });
+            try {
+                req.admin = await Admin.findById(decoded.id).select('-password');
+                if (!req.admin) {
+                    console.error('Admin not found for ID:', decoded.id);
+                    return res.status(401).json({ message: 'Not authorized, admin not found' });
+                }
+                // Check if admin account is active
+                if (!req.admin.isActive) {
+                    return res.status(401).json({ message: 'Account is deactivated' });
+                }
+                //console.log('Admin authenticated:', req.admin.name);
+            } catch (error) {
+                console.error('Error finding admin:', error);
+                return res.status(500).json({ message: 'Server error during authentication' });
             }
         } else {
             // Default to doctor for backward compatibility
-            req.doctor = await Doctor.findById(decoded.id).select('-password');
-            if (!req.doctor) {
-                return res.status(401).json({ message: 'Not authorized, doctor not found' });
+            try {
+                req.doctor = await Doctor.findById(decoded.id).select('-password');
+                if (!req.doctor) {
+                    console.error('Doctor not found for ID:', decoded.id);
+                    return res.status(401).json({ message: 'Not authorized, doctor not found' });
+                }
+                //console.log('Doctor authenticated:', req.doctor.name);
+            } catch (error) {
+                console.error('Error finding doctor:', error);
+                return res.status(500).json({ message: 'Server error during authentication' });
             }
         }
 

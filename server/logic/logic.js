@@ -51,9 +51,10 @@ async function createAndScheduleConsultation(patient, reason, slotId) {
                 patient: patient._id,
                 doctor: doctor._id,
                 bookingReason: reason,
+                bookingChannel: 'sms', // Track that this was booked via SMS
                 scheduledStart: bookedSlot.startTime,
                 scheduledEnd: bookedSlot.endTime,
-                messages: [{ sender: 'PATIENT', content: `Booking reason: ${reason}` }],
+                messages: [{ sender: 'PATIENT', content: `Booking reason: ${reason}`, channel: 'sms' }],
                 status: 'SCHEDULED'
             });
             await consultation.save();
@@ -98,9 +99,10 @@ async function createAndScheduleConsultation(patient, reason, slotId) {
             patient: patient._id,
             doctor: doctor._id,
             bookingReason: reason,
+            bookingChannel: 'sms', // Track that this was booked via SMS
             scheduledStart: new Date(),
             scheduledEnd: new Date(Date.now() + 30 * 60 * 1000), // Default to 30 mins from now
-            messages: [{ sender: 'PATIENT', content: `Booking reason: ${reason}` }],
+            messages: [{ sender: 'PATIENT', content: `Booking reason: ${reason}`, channel: 'sms' }],
             status: 'PENDING'
         });
         await consultation.save();
@@ -163,9 +165,10 @@ async function bookConsultationSlot(patient, doctorId, slotId, reason) {
             patient: patient._id,
             doctor: doctor._id,
             bookingReason: reason,
+            bookingChannel: 'sms', // Track that this was booked via SMS
             scheduledStart: slot.startTime, // Corrected from scheduledTime
             scheduledEnd: slot.endTime, // Added scheduledEnd
-            messages: [{ sender: 'PATIENT', content: `Appointment booked for ${new Date(slot.startTime).toLocaleString()}: ${reason}` }],
+            messages: [{ sender: 'PATIENT', content: `Appointment booked for ${new Date(slot.startTime).toLocaleString()}: ${reason}`, channel: 'sms' }],
             status: 'SCHEDULED' // New status for pre-booked appointments
         });
         await consultation.save();

@@ -16,7 +16,7 @@ const ChatWindow = ({ consultation, onUpdate }) => {
         if (!message.trim()) return;
         setIsSending(true);
         try {
-            await api.post(`/consultations/${consultation._id}/doctor/messages`, { content: message });
+            await api.post(`/consultations/${consultation._id}/messages`, { content: message });
             setMessage('');
             onUpdate(); // Refresh consultations
         } catch (err) {

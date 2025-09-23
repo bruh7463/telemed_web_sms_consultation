@@ -134,10 +134,15 @@ router.put('/doctors/:id', protect, requireAdmin, requirePermission('doctors', '
             }
         }
 
+        // Validate workload is not negative
+        if (workload !== undefined && workload < 0) {
+            return res.status(400).json({ message: 'Workload cannot be negative' });
+        }
+
         doctor.name = name || doctor.name;
         doctor.email = email || doctor.email;
         doctor.specialty = specialty || doctor.specialty;
-        doctor.workload = workload !== undefined ? workload : doctor.workload;
+        doctor.workload = workload !== undefined ? Math.max(0, workload) : doctor.workload; // Ensure non-negative
 
         await doctor.save();
 
@@ -149,6 +154,53 @@ router.put('/doctors/:id', protect, requireAdmin, requirePermission('doctors', '
                 email: doctor.email,
                 specialty: doctor.specialty,
                 workload: doctor.workload
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   POST /api/admin/doctors
+// @desc    Create new doctor
+// @access  Private (Admin only)
+router.post('/doctors', protect, requireAdmin, async (req, res) => {
+    try {
+        const { name, email, password, specialty = 'General Practitioner' } = req.body;
+
+        // Validation
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Name, email, and password are required' });
+        }
+
+        // Check if doctor exists
+        let doctor = await Doctor.findOne({ email });
+        if (doctor) {
+            return res.status(400).json({ message: 'Doctor already exists' });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Create new doctor
+        doctor = new Doctor({
+            name,
+            email,
+            password: hashedPassword,
+            specialty
+        });
+
+        await doctor.save();
+
+        res.status(201).json({
+            message: 'Doctor created successfully',
+            doctor: {
+                id: doctor.id,
+                name: doctor.name,
+                email: doctor.email,
+                specialty: doctor.specialty
             }
         });
     } catch (err) {
@@ -293,6 +345,68 @@ router.put('/patients/:id', protect, requireAdmin, requirePermission('patients',
 
         res.json({
             message: 'Patient updated successfully',
+            patient: {
+                id: patient.id,
+                name: patient.name,
+                phoneNumber: patient.phoneNumber,
+                nrc: patient.nrc,
+                dateOfBirth: patient.dateOfBirth,
+                gender: patient.gender,
+                address: patient.address
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   POST /api/admin/patients
+// @desc    Create new patient
+// @access  Private (Admin only)
+router.post('/patients', protect, requireAdmin, async (req, res) => {
+    try {
+        const { name, phoneNumber, nrc, password, dateOfBirth, gender, address } = req.body;
+
+        // Validation
+        if (!name || !phoneNumber || !nrc) {
+            return res.status(400).json({ message: 'Name, phone number, and NRC are required' });
+        }
+
+        // Check if patient exists by phone number
+        let patient = await Patient.findOne({ phoneNumber });
+        if (patient) {
+            return res.status(400).json({ message: 'Patient with this phone number already exists' });
+        }
+
+        // Check if patient exists by NRC
+        patient = await Patient.findOne({ nrc });
+        if (patient) {
+            return res.status(400).json({ message: 'Patient with this NRC already exists' });
+        }
+
+        // Hash password if provided, otherwise set to null (for SMS registration flow)
+        let hashedPassword = null;
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            hashedPassword = await bcrypt.hash(password, salt);
+        }
+
+        // Create new patient
+        patient = new Patient({
+            name,
+            phoneNumber,
+            nrc,
+            password: hashedPassword,
+            dateOfBirth,
+            gender,
+            address
+        });
+
+        await patient.save();
+
+        res.status(201).json({
+            message: 'Patient created successfully',
             patient: {
                 id: patient.id,
                 name: patient.name,

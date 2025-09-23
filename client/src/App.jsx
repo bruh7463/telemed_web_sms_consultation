@@ -1,105 +1,96 @@
-import { useState, useEffect, createContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import api, { setAuthToken } from '../src/services/api';
-import LoginPage from '../src/pages/LoginPage';
-import DashboardPage from '../src/pages/DashboardPage';
-import PatientAuth from './components/PatientAuth';
-import PatientDashboard from './pages/PatientDashBoard';
-import AdminLoginPage from './pages/AdminLoginPage';
-import AdminDashboard from './pages/AdminDashboard';
-
-export const AuthContext = createContext(null);
+import { useState, useEffect } from 'react';
+import { Route, Routes, Navigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { setAuthenticated, setUser, setRole, logout } from './redux/slices/authSlice';
+import { setUserData } from './redux/slices/appSlice';
+import { authAPI } from './services/api';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import PatientDashboard from './pages/patient/PatientDashboard';
+import DoctorDashboard from './pages/doctor/DoctorDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import PatientSetPassword from './pages/patient/PatientSetPassword';
+import PatientRegister from './pages/PatientRegister';
+import ConnectivityTest from './components/ConnectivityTest';
 
 function App() {
-    const [auth, setAuth] = useState({
-        token: null,
-        isAuthenticated: null,
-        loading: true,
-        doctor: null,
-        userType: null // 'doctor', 'patient', 'admin'
-    });
+    const dispatch = useDispatch();
+    const { isAuthenticated, loading, role } = useSelector(state => state.auth);
 
-    // Function to check authentication status with the backend using the cookie
+    // Debug logging for authentication state changes
+    console.log('App render - isAuthenticated:', isAuthenticated, 'role:', role, 'loading:', loading);
+
+    // Function to check authentication status with the backend
     const checkAuthStatus = async () => {
         try {
-            // Try to check doctor authentication first
-            const doctorRes = await api.get('/auth/doctor/status');
-            if (doctorRes.data.isAuthenticated) {
-                setAuth({
-                    token: 'EXISTS',
-                    isAuthenticated: true,
-                    loading: false,
-                    doctor: doctorRes.data.doctor,
-                    userType: 'doctor'
-                });
+            // Check all three status endpoints in parallel for efficiency
+            const [patientRes, doctorRes, adminRes] = await Promise.allSettled([
+                authAPI.patientStatus(),
+                authAPI.doctorStatus(),
+                authAPI.adminStatus()
+            ]);
+
+            // Process results - find the first successful authentication
+            if (patientRes.status === 'fulfilled' && patientRes.value.data.isAuthenticated) {
+                dispatch(setAuthenticated(true));
+                dispatch(setUser(patientRes.value.data.patient));
+                dispatch(setRole('patient'));
+                dispatch(setUserData({
+                    id: patientRes.value.data.patient.id,
+                    name: patientRes.value.data.patient.name,
+                    email: patientRes.value.data.patient.email,
+                    phoneNumber: patientRes.value.data.patient.phoneNumber,
+                    role: 'patient'
+                }));
                 return;
             }
-        } catch (err) {
-            // Doctor not authenticated, continue to check others
-        }
 
-        try {
-            // Try to check patient authentication
-            const patientRes = await api.get('/auth/patient/status');
-            if (patientRes.data.isAuthenticated) {
-                setAuth({
-                    token: 'EXISTS',
-                    isAuthenticated: true,
-                    loading: false,
-                    patient: patientRes.data.patient,
-                    userType: 'patient'
-                });
+            if (doctorRes.status === 'fulfilled' && doctorRes.value.data.isAuthenticated) {
+                dispatch(setAuthenticated(true));
+                dispatch(setUser(doctorRes.value.data.doctor));
+                dispatch(setRole('doctor'));
+                dispatch(setUserData({
+                    id: doctorRes.value.data.doctor.id,
+                    name: doctorRes.value.data.doctor.name,
+                    email: doctorRes.value.data.doctor.email,
+                    role: 'doctor'
+                }));
                 return;
             }
-        } catch (err) {
-            // Patient not authenticated, continue to check admin
-        }
 
-        try {
-            // Try to check admin authentication
-            const adminRes = await api.get('/auth/admin/status');
-            if (adminRes.data.isAuthenticated) {
-                setAuth({
-                    token: 'EXISTS',
-                    isAuthenticated: true,
-                    loading: false,
-                    admin: adminRes.data.admin,
-                    userType: 'admin'
-                });
+            if (adminRes.status === 'fulfilled' && adminRes.value.data.isAuthenticated) {
+                dispatch(setAuthenticated(true));
+                dispatch(setUser(adminRes.value.data.admin));
+                dispatch(setRole('admin'));
+                dispatch(setUserData({
+                    id: adminRes.value.data.admin.id,
+                    name: adminRes.value.data.admin.name,
+                    email: adminRes.value.data.admin.email,
+                    role: 'admin'
+                }));
                 return;
             }
-        } catch (err) {
-            // Admin not authenticated
-        }
 
-        // No authentication found
-        setAuth({
-            token: null,
-            isAuthenticated: false,
-            loading: false,
-            doctor: null,
-            patient: null,
-            admin: null,
-            userType: null
-        });
-    };
+            // Check for actual errors (not just 403 Forbidden which is expected)
+            const errors = [patientRes, doctorRes, adminRes]
+                .filter(result => result.status === 'rejected')
+                .map(result => result.reason);
 
-    const logout = async () => {
-        try {
-            await api.post('/auth/logout');
+            const hasRealErrors = errors.some(err =>
+                !err.response || (err.response.status !== 401 && err.response.status !== 403)
+            );
+
+            if (hasRealErrors) {
+                console.warn('Some authentication checks failed:', errors);
+            }
+
+            // No authenticated session found - this is normal for new users
+            console.log('No active authentication session found');
+            dispatch(logout());
+
         } catch (err) {
-            console.error('Error logging out:', err);
-        } finally {
-            setAuthToken(null);
-            setAuth({
-                token: null,
-                isAuthenticated: false,
-                loading: false,
-                doctor: null,
-                patient: null,
-                admin: null,
-                userType: null
-            });
+            console.error('Unexpected error during authentication check:', err);
+            dispatch(logout());
         }
     };
 
@@ -107,118 +98,181 @@ function App() {
         checkAuthStatus();
     }, []);
 
-    // Doctor login function
-    const loginDoctor = async (credentials) => {
+    const handleLogin = async (credentials, userRole) => {
         try {
-            const res = await api.post('/auth/doctor/login', credentials);
-            setAuth({
-                token: 'EXISTS',
-                isAuthenticated: true,
-                loading: false,
-                doctor: res.data.doctor,
-                userType: 'doctor'
-            });
+            console.log('Starting login process for role:', userRole);
+            let res;
+            switch (userRole) {
+                case 'patient':
+                    console.log('Calling patient login API...');
+                    res = await authAPI.patientLogin(credentials);
+                    console.log('Patient login response:', res.data);
+                    dispatch(setUser(res.data.patient));
+                    dispatch(setRole('patient'));
+                    break;
+                case 'doctor':
+                    console.log('Calling doctor login API...');
+                    res = await authAPI.doctorLogin(credentials);
+                    console.log('Doctor login response:', res.data);
+                    dispatch(setUser(res.data.doctor));
+                    dispatch(setRole('doctor'));
+                    break;
+                case 'admin':
+                    console.log('Calling admin login API...');
+                    res = await authAPI.adminLogin(credentials);
+                    console.log('Admin login response:', res.data);
+                    dispatch(setUser(res.data.admin));
+                    dispatch(setRole('admin'));
+                    break;
+                default:
+                    throw new Error('Invalid role');
+            }
+
+            console.log('Setting authentication state...');
+            dispatch(setAuthenticated(true));
+            dispatch(setUserData({
+                id: res.data[userRole].id,
+                name: res.data[userRole].name,
+                email: res.data[userRole].email,
+                role: userRole
+            }));
+
+            console.log('Login process completed successfully');
+            return res.data; // Return the response data
         } catch (err) {
-            throw new Error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+            console.error('Login failed:', err);
+            // Pass the full error object so LoginPage can handle password setup flow
+            const error = new Error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+            error.response = err.response;
+            error.patientId = err.response?.data?.patientId;
+            error.requiresPasswordSetup = err.response?.data?.requiresPasswordSetup;
+            throw error;
         }
     };
 
-    // Patient login function
-    const loginPatient = async (credentials) => {
+    const handleLogout = async () => {
         try {
-            const res = await api.post('/auth/login/patient', credentials);
-            setAuth({
-                token: 'EXISTS',
-                isAuthenticated: true,
-                loading: false,
-                patient: res.data.patient,
-                userType: 'patient'
-            });
+            await authAPI.logout();
         } catch (err) {
-            throw new Error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+            console.error('Error logging out:', err);
+        } finally {
+            dispatch(logout());
         }
     };
 
-    // Admin login function
-    const loginAdmin = async (credentials) => {
-        try {
-            const res = await api.post('/auth/admin/login', credentials);
-            setAuth({
-                token: 'EXISTS',
-                isAuthenticated: true,
-                loading: false,
-                admin: res.data.admin,
-                userType: 'admin'
-            });
-        } catch (err) {
-            throw new Error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+    const getDashboardRoute = () => {
+        switch (role) {
+            case 'patient':
+                return '/patient/dashboard';
+            case 'doctor':
+                return '/doctor/dashboard';
+            case 'admin':
+                return '/admin/dashboard';
+            default:
+                return '/dashboard';
         }
     };
 
-    if (auth.loading) {
-        return <div className="flex justify-center items-center h-screen bg-gray-100 font-semibold text-gray-600">Initializing Application...</div>;
+    const getDashboardComponent = () => {
+        switch (role) {
+            case 'patient':
+                return <PatientDashboard onLogout={handleLogout} />;
+            case 'doctor':
+                return <DoctorDashboard onLogout={handleLogout} />;
+            case 'admin':
+                return <AdminDashboard onLogout={handleLogout} />;
+            default:
+                return <DashboardPage onLogout={handleLogout} />;
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-gray-100 font-semibold text-gray-600">
+                Initializing Application...
+            </div>
+        );
     }
 
     return (
-        <AuthContext.Provider value={{
-            ...auth,
-            loginDoctor,
-            loginPatient,
-            loginAdmin,
-            logout,
-            checkAuthStatus
-        }}>
-            <Router>
-                <Routes>
-                    {/* Default route - redirect based on authentication */}
-                    <Route path="/" element={
-                        auth.isAuthenticated ? (
-                            auth.userType === 'doctor' ? <Navigate to="/doctor/dashboard" /> :
-                            auth.userType === 'patient' ? <Navigate to="/patient/dashboard" /> :
-                            auth.userType === 'admin' ? <Navigate to="/admin/dashboard" /> :
-                            <Navigate to="/login" />
+        <div className="App">
+            <Routes>
+                <Route
+                    path="/login"
+                    element={
+                        isAuthenticated ? (
+                            <Navigate to={getDashboardRoute()} replace />
                         ) : (
-                            <Navigate to="/login" />
+                            <LoginPage onLogin={handleLogin} />
                         )
-                    } />
-
-                    {/* Doctor Routes */}
-                    <Route path="/login" element={
-                        auth.isAuthenticated && auth.userType === 'doctor' ?
-                            <Navigate to="/doctor/dashboard" /> :
-                            <LoginPage onLogin={loginDoctor} />
-                    } />
-                    <Route path="/doctor/dashboard" element={
-                        auth.isAuthenticated && auth.userType === 'doctor' ?
-                            <DashboardPage /> :
-                            <Navigate to="/login" />
-                    } />
-
-                    {/* Patient Routes */}
-                    <Route path="/patient/auth" element={<PatientAuth />} />
-                    <Route path="/patient/dashboard" element={
-                        auth.isAuthenticated && auth.userType === 'patient' ?
-                            <PatientDashboard /> :
-                            <Navigate to="/patient/auth" />
-                    } />
-
-                    {/* Admin Routes */}
-                    <Route path="/admin/login" element={
-                        auth.isAuthenticated && auth.userType === 'admin' ?
-                            <Navigate to="/admin/dashboard" /> :
-                            <AdminLoginPage />
-                    } />
-                    <Route path="/admin/dashboard" element={
-                        auth.isAuthenticated && auth.userType === 'admin' ?
-                            <AdminDashboard /> :
-                            <Navigate to="/admin/login" />
-                    } />
-
-                    {/* Catch all route */}
-                    <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
-            </Router>
-        </AuthContext.Provider>
+                    }
+                />
+                <Route
+                    path="/register"
+                    element={
+                        isAuthenticated ? (
+                            <Navigate to={getDashboardRoute()} replace />
+                        ) : (
+                            <PatientRegister />
+                        )
+                    }
+                />
+                <Route
+                    path="/connectivity-test"
+                    element={<ConnectivityTest />}
+                />
+                <Route
+                    path="/patient/set-password"
+                    element={<PatientSetPassword />}
+                />
+                <Route
+                    path="/patient/*"
+                    element={
+                        isAuthenticated && role === 'patient' ? (
+                            <PatientDashboard onLogout={handleLogout} />
+                        ) : (
+                            <Navigate to="/login" replace />
+                        )
+                    }
+                />
+                <Route
+                    path="/doctor/*"
+                    element={
+                        isAuthenticated && role === 'doctor' ? (
+                            <DoctorDashboard onLogout={handleLogout} />
+                        ) : (
+                            <Navigate to="/login" replace />
+                        )
+                    }
+                />
+                <Route
+                    path="/admin/*"
+                    element={
+                        isAuthenticated && role === 'admin' ? (
+                            <AdminDashboard onLogout={handleLogout} />
+                        ) : (
+                            <Navigate to="/login" replace />
+                        )
+                    }
+                />
+                <Route
+                    path="/dashboard/*"
+                    element={
+                        isAuthenticated ? (
+                            getDashboardComponent()
+                        ) : (
+                            <Navigate to="/login" replace />
+                        )
+                    }
+                />
+                <Route
+                    path="/"
+                    element={
+                        <Navigate to={isAuthenticated ? getDashboardRoute() : "/login"} replace />
+                    }
+                />
+            </Routes>
+        </div>
     );
 }
 

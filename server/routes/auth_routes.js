@@ -90,12 +90,15 @@ router.post('/logout', (req, res) => {
     res.json({ message: 'Logged out successfully' });
 });
 
-// @route   GET /api/auth/status
-// @desc    Check authentication status based on cookie
+// @route   GET /api/auth/doctor/status
+// @desc    Check doctor authentication status based on cookie
 // @access  Private (requires valid cookie)
 router.get('/doctor/status', protect, (req, res) => {
-    // If the 'protect' middleware passed, it means a valid token was found in the cookie,
-    // and req.doctor is populated.
+    // Only allow if the authenticated user is actually a doctor
+    if (!req.doctor) {
+        return res.status(403).json({ message: 'Access denied: Not authenticated as doctor' });
+    }
+
     res.json({
         isAuthenticated: true,
         doctor: {
@@ -110,8 +113,11 @@ router.get('/doctor/status', protect, (req, res) => {
 // @desc    Check patient authentication status based on cookie
 // @access  Private (requires valid cookie)
 router.get('/patient/status', protect, (req, res) => {
-    // If the 'protect' middleware passed, it means a valid token was found in the cookie,
-    // and req.patient is populated.
+    // Only allow if the authenticated user is actually a patient
+    if (!req.patient) {
+        return res.status(403).json({ message: 'Access denied: Not authenticated as patient' });
+    }
+
     res.json({
         isAuthenticated: true,
         patient: {
@@ -382,8 +388,11 @@ router.post('/admin/login', async (req, res) => {
 // @desc    Check admin authentication status based on cookie
 // @access  Private (requires valid cookie)
 router.get('/admin/status', protect, (req, res) => {
-    // If the 'protect' middleware passed, it means a valid token was found in the cookie,
-    // and req.admin is populated.
+    // Only allow if the authenticated user is actually an admin
+    if (!req.admin) {
+        return res.status(403).json({ message: 'Access denied: Not authenticated as admin' });
+    }
+
     res.json({
         isAuthenticated: true,
         admin: {
