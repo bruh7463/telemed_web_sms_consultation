@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Calendar, FileText, MessageCircle } from 'lucide-react';
+import { Home, Calendar, FileText, MessageCircle, History } from 'lucide-react';
 
 const PatientSidebar = ({ activeView, setActiveView }) => {
     const menuItems = [
@@ -17,6 +17,11 @@ const PatientSidebar = ({ activeView, setActiveView }) => {
             id: 'prescriptions',
             label: 'Prescriptions',
             icon: FileText,
+        },
+        {
+            id: 'history',
+            label: 'History',
+            icon: History,
         },
         {
             id: 'chat',

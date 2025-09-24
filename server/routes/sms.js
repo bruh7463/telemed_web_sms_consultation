@@ -263,8 +263,20 @@ router.post('/incoming', async (req, res) => {
 
             if (intentName === 'RegisterNewPatient' && dialogflowResult.allRequiredParamsPresent) {
                 
-                const firstName = params.first_name?.stringValue;
-                const lastName = params.last_name?.stringValue;
+                let firstName = params.first_name?.stringValue;
+                if (typeof firstName === 'string' && firstName.length > 0) {
+                    firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+                } else {
+                    firstName = 'NULL';
+                }
+
+                let lastName = params.last_name?.stringValue;
+                if (typeof lastName === 'string' && lastName.length > 0) {
+                    lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+                } else {
+                    lastName = 'NULL';
+                }
+
                 const nrc = params.nrc?.stringValue || params.nrc?.numberValue?.toString();
                 const dateOfBirth = params.dateOfBirth?.stringValue ? new Date(params.dateOfBirth.stringValue) : undefined;
                 const gender = params.gender?.stringValue;
@@ -277,7 +289,7 @@ router.post('/incoming', async (req, res) => {
                     return res.status(400).send("Missing parameters from Dialogflow.");
                 }
                 
-                const name = `${firstName} ${lastName}`;
+                const name = (firstName !== 'NULL' || lastName !== 'NULL') ? `${firstName} ${lastName}` : 'Unnamed Patient';
                 let existingPatientNRC = await Patient.findOne({ nrc });
                 let existingPatientPhone = await Patient.findOne({ from });
 

@@ -8,6 +8,7 @@ import PatientHeader from '../../components/PatientHeader';
 import PatientSidebar from '../../components/PatientSidebar';
 import PatientAppointments from './PatientAppointments';
 import PatientPrescriptions from './PatientPrescriptions';
+import PatientHistory from './PatientHistory';
 import PatientChat from './PatientChat';
 
 const PatientDashboard = ({ onLogout }) => {
@@ -75,6 +76,8 @@ const PatientDashboard = ({ onLogout }) => {
                 return <PatientAppointments onNavigateToChat={handleNavigateToChat} />;
             case 'prescriptions':
                 return <PatientPrescriptions />;
+            case 'history':
+                return <PatientHistory />;
             case 'chat':
                 return <PatientChat />;
             default:
