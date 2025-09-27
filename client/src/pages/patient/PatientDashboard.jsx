@@ -125,6 +125,7 @@ const PatientDashboardHome = ({ onNavigateToChat }) => {
     const activeConsultations = consultationsArray.filter(c => c.status === 'ACTIVE');
     const pendingConsultations = consultationsArray.filter(c => c.status === 'PENDING');
 
+    const activePrescriptions = prescriptionsArray.filter(p => p.status === 'ACTIVE');
     const recentPrescriptions = prescriptionsArray.slice(0, 5);
 
     return (
@@ -141,7 +142,7 @@ const PatientDashboardHome = ({ onNavigateToChat }) => {
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <h3 className="text-lg font-semibold text-gray-900">Active Prescriptions</h3>
-                    <p className="text-3xl font-bold text-green-600 mt-2">{prescriptionsArray.length}</p>
+                    <p className="text-3xl font-bold text-green-600 mt-2">{activePrescriptions.length}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <h3 className="text-lg font-semibold text-gray-900">Completed Consultations</h3>

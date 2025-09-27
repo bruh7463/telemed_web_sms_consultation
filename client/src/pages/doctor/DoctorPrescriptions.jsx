@@ -151,15 +151,31 @@ const DoctorPrescriptions = () => {
         }
     };
 
+    const handleCancelPrescription = async (prescriptionId) => {
+        if (!window.confirm('Are you sure you want to cancel this prescription?')) return;
+
+        try {
+            setLoading(true);
+            await prescriptionAPI.cancelPrescription(prescriptionId);
+            await loadPrescriptions();
+        } catch (err) {
+            console.error('Error cancel prescription:', err);
+            alert('Failed to cancel prescription');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDeletePrescription = async (prescriptionId) => {
-        if (!window.confirm('Are you sure you want to delete this prescription?')) return;
+        if (!window.confirm('Are you sure you want to permanently delete this prescription? This action cannot be undone.')) return;
 
         try {
             setLoading(true);
             await prescriptionAPI.deletePrescription(prescriptionId);
             await loadPrescriptions();
+            alert('Prescription permanently deleted successfully');
         } catch (err) {
-            console.error('Error deleting prescription:', err);
+            console.error('Error delete prescription:', err);
             alert('Failed to delete prescription');
         } finally {
             setLoading(false);
@@ -408,13 +424,23 @@ const DoctorPrescriptions = () => {
                                         >
                                             Send SMS
                                         </button>
-                                        <button
-                                            onClick={() => handleDeletePrescription(prescription._id || prescription.id)}
-                                            disabled={loading}
-                                            className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200 disabled:opacity-50"
-                                        >
-                                            Delete
-                                        </button>
+                                        {prescription.status === 'CANCELLED' ? (
+                                            <button
+                                                onClick={() => handleDeletePrescription(prescription._id || prescription.id)}
+                                                disabled={loading}
+                                                className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                                            >
+                                                Delete
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleCancelPrescription(prescription._id || prescription.id)}
+                                                disabled={loading}
+                                                className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200 disabled:opacity-50"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

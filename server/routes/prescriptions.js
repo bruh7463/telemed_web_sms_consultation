@@ -83,6 +83,74 @@ router.post('/', protect, async (req, res) => {
     }
 });
 
+// Helper function to parse duration string and calculate expiration date
+function calculateExpirationDate(createdAt, durationString) {
+    if (!durationString || !createdAt) return null;
+
+    const createdDate = new Date(createdAt);
+    const durationMatch = durationString.toLowerCase().match(/^(\d+)\s*(day|week|month|year)s?$/);
+
+    if (!durationMatch) return null;
+
+    const value = parseInt(durationMatch[1]);
+    const unit = durationMatch[2];
+
+    const expirationDate = new Date(createdDate);
+
+    switch (unit) {
+        case 'day':
+            expirationDate.setDate(expirationDate.getDate() + value);
+            break;
+        case 'week':
+            expirationDate.setDate(expirationDate.getDate() + (value * 7));
+            break;
+        case 'month':
+            expirationDate.setMonth(expirationDate.getMonth() + value);
+            break;
+        case 'year':
+            expirationDate.setFullYear(expirationDate.getFullYear() + value);
+            break;
+        default:
+            return null;
+    }
+
+    return expirationDate;
+}
+
+// Helper function to check and update expired prescriptions
+async function updateExpiredPrescriptions(prescriptions) {
+    const now = new Date();
+    const updates = [];
+
+    for (const prescription of prescriptions) {
+        if (prescription.status === 'ACTIVE' && prescription.medications && prescription.medications.length > 0) {
+            // Check if any medication has expired
+            let hasExpired = false;
+
+            for (const medication of prescription.medications) {
+                const expirationDate = calculateExpirationDate(prescription.createdAt, medication.duration);
+                if (expirationDate && now > expirationDate) {
+                    hasExpired = true;
+                    break;
+                }
+            }
+
+            if (hasExpired) {
+                // Update prescription status to COMPLETED
+                await Prescription.findByIdAndUpdate(prescription._id, { status: 'COMPLETED' });
+                prescription.status = 'COMPLETED'; // Update in memory for immediate response
+                updates.push(prescription._id);
+            }
+        }
+    }
+
+    if (updates.length > 0) {
+        console.log(`Auto-completed ${updates.length} expired prescriptions:`, updates);
+    }
+
+    return prescriptions;
+}
+
 // @route   GET /api/prescriptions
 // @desc    Get prescriptions for a patient (Patient) or doctor's prescriptions (Doctor)
 // @access  Private
@@ -113,6 +181,9 @@ router.get('/', protect, async (req, res) => {
         } else {
             return res.status(403).json({ message: 'Access denied' });
         }
+
+        // Check and update expired prescriptions
+        prescriptions = await updateExpiredPrescriptions(prescriptions);
 
         res.json({ prescriptions });
 
@@ -148,6 +219,27 @@ router.get('/:id', protect, async (req, res) => {
         // Admin can view any prescription
         if (!req.patient && !req.doctor && !req.admin) {
             return res.status(403).json({ message: 'Access denied' });
+        }
+
+        // Check if this prescription has expired and update if needed
+        if (prescription.status === 'ACTIVE' && prescription.medications && prescription.medications.length > 0) {
+            const now = new Date();
+            let hasExpired = false;
+
+            for (const medication of prescription.medications) {
+                const expirationDate = calculateExpirationDate(prescription.createdAt, medication.duration);
+                if (expirationDate && now > expirationDate) {
+                    hasExpired = true;
+                    break;
+                }
+            }
+
+            if (hasExpired) {
+                // Update prescription status to COMPLETED
+                prescription.status = 'COMPLETED';
+                await prescription.save();
+                console.log(`Auto-completed expired prescription: ${prescription._id}`);
+            }
         }
 
         res.json({ prescription });
@@ -283,12 +375,12 @@ router.post('/:id/send-sms', protect, async (req, res) => {
 });
 
 // @route   DELETE /api/prescriptions/:id
-// @desc    Cancel/delete a prescription (Doctor only)
+// @desc    Cancel a prescription (Doctor only) - sets status to CANCELLED
 // @access  Private (Doctor)
 router.delete('/:id', protect, async (req, res) => {
     try {
         if (!req.doctor) {
-            return res.status(403).json({ message: 'Only doctors can delete prescriptions' });
+            return res.status(403).json({ message: 'Only doctors can cancel prescriptions' });
         }
 
         const prescription = await Prescription.findOne({
@@ -307,6 +399,41 @@ router.delete('/:id', protect, async (req, res) => {
 
     } catch (error) {
         console.error('Error cancelling prescription:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   DELETE /api/prescriptions/:id/hard-delete
+// @desc    Permanently delete a prescription from database (Doctor only)
+// @access  Private (Doctor)
+router.delete('/:id/hard-delete', protect, async (req, res) => {
+    try {
+        if (!req.doctor) {
+            return res.status(403).json({ message: 'Only doctors can delete prescriptions' });
+        }
+
+        const prescription = await Prescription.findOne({
+            _id: req.params.id,
+            doctor: req.doctor._id
+        });
+
+        if (!prescription) {
+            return res.status(404).json({ message: 'Prescription not found or access denied' });
+        }
+
+        // Only allow deletion of cancelled prescriptions
+        if (prescription.status !== 'CANCELLED') {
+            return res.status(400).json({
+                message: 'Only cancelled prescriptions can be permanently deleted'
+            });
+        }
+
+        await Prescription.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'Prescription permanently deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting prescription:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

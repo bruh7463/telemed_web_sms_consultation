@@ -13,6 +13,11 @@ router.get('/available', async (req, res) => {
             .select('name specialty workload availability')
             .sort({ workload: 1, name: 1 }); // Sort by workload first, then name
 
+        // Clean up expired availability slots for all doctors
+        for (const doctor of doctors) {
+            await cleanupExpiredAvailability(doctor);
+        }
+
         res.json(doctors);
     } catch (error) {
         console.error('Error fetching available doctors:', error);
@@ -31,6 +36,9 @@ router.get('/:id/availability', async (req, res) => {
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found' });
         }
+
+        // Clean up expired availability slots first
+        await cleanupExpiredAvailability(doctor);
 
         let availableSlots = doctor.availability.filter(slot => !slot.isBooked);
 
@@ -76,6 +84,31 @@ router.get('/:id/availability', async (req, res) => {
     }
 });
 
+// Helper function to clean up expired availability slots
+async function cleanupExpiredAvailability(doctor) {
+    const now = new Date();
+    const initialCount = doctor.availability.length;
+
+    // Filter out expired slots that are not booked
+    doctor.availability = doctor.availability.filter(slot => {
+        // Keep if slot is booked (never delete booked slots)
+        if (slot.isBooked) return true;
+
+        // Keep if slot hasn't expired yet
+        const endTime = new Date(slot.endTime);
+        return endTime > now;
+    });
+
+    // Save if any slots were removed
+    if (doctor.availability.length < initialCount) {
+        await doctor.save();
+        const removedCount = initialCount - doctor.availability.length;
+        console.log(`Auto-deleted ${removedCount} expired availability slots for doctor ${doctor.name}`);
+    }
+
+    return doctor;
+}
+
 // Get doctor's availability slots (protected route for doctors)
 router.get('/availability', protect, async (req, res) => {
     try {
@@ -88,6 +121,9 @@ router.get('/availability', protect, async (req, res) => {
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found' });
         }
+
+        // Clean up expired availability slots
+        await cleanupExpiredAvailability(doctor);
 
         // Sort availability by start time
         const sortedAvailability = doctor.availability.sort((a, b) =>

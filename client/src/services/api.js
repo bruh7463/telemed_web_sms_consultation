@@ -57,7 +57,8 @@ export const prescriptionAPI = {
     getDoctorPrescriptions: () => api.get('/prescriptions'),
     createPrescription: (data) => api.post('/prescriptions', data),
     updatePrescription: (id, data) => api.put(`/prescriptions/${id}`, data),
-    deletePrescription: (id) => api.delete(`/prescriptions/${id}`),
+    cancelPrescription: (id) => api.delete(`/prescriptions/${id}`),
+    deletePrescription: (id) => api.delete(`/prescriptions/${id}/hard-delete`),
     sendPrescriptionSMS: (id) => api.post(`/prescriptions/${id}/send-sms`),
 };
 

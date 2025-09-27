@@ -123,7 +123,7 @@ const DoctorDashboardHome = ({ onNavigateToChat }) => {
                     <p className="text-3xl font-bold text-blue-600 mt-2">{completedConsultations.length}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
-                    <h3 className="text-lg font-semibold text-gray-900">Prescriptions</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Prescriptions Issued</h3>
                     <p className="text-3xl font-bold text-purple-600 mt-2">{prescriptionsArray.length}</p>
                 </div>
             </div>
