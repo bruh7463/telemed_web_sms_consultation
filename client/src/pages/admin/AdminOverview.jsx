@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { adminAPI } from '../../services/api';
 import { BarChart3, Users, Stethoscope, FileText, TrendingUp } from 'lucide-react';
 
 const AdminOverview = () => {
@@ -129,7 +128,6 @@ const AdminOverview = () => {
                 {stats.map((stat, index) => {
                     const Icon = stat.icon;
                     const growthColor = stat.change.isPositive ? 'text-green-500' : 'text-red-500';
-                    const growthIcon = stat.change.isPositive ? 'trending-up' : 'trending-down';
 
                     return (
                         <div key={index} className="bg-white p-6 rounded-lg shadow-sm border">

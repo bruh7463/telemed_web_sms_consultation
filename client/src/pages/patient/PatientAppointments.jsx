@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { consultationAPI, doctorAPI } from '../../services/api';
 import { setConsultations, updateConsultation } from '../../redux/slices/consultSlice';
@@ -24,6 +24,16 @@ const PatientAppointments = ({ onNavigateToChat }) => {
     const [loadingDoctors, setLoadingDoctors] = useState(false);
     const [loadingSlots, setLoadingSlots] = useState(false);
 
+    const loadAppointments = useCallback(async () => {
+        try {
+            const response = await consultationAPI.getPatientConsultations();
+            dispatch(setConsultations(response.data));
+        } catch (error) {
+            // Silent error handling - don't interrupt user experience
+            console.debug('Background appointment polling failed:', error.message);
+        }
+    }, [dispatch]);
+
     // Load appointments on component mount and start polling
     useEffect(() => {
         loadAppointments();
@@ -31,7 +41,7 @@ const PatientAppointments = ({ onNavigateToChat }) => {
         const pollInterval = setInterval(loadAppointments, 8000); // Poll every 8 seconds
 
         return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, []);
+    }, [loadAppointments]);
 
     // Fetch available doctors when booking method changes to 'schedule'
     useEffect(() => {
@@ -45,17 +55,7 @@ const PatientAppointments = ({ onNavigateToChat }) => {
         if (scheduleForm.doctorId && bookingMethod === 'schedule') {
             fetchDoctorAvailability(scheduleForm.doctorId);
         }
-    }, [scheduleForm.doctorId]);
-
-    const loadAppointments = async () => {
-        try {
-            const response = await consultationAPI.getPatientConsultations();
-            dispatch(setConsultations(response.data));
-        } catch (error) {
-            // Silent error handling - don't interrupt user experience
-            console.debug('Background appointment polling failed:', error.message);
-        }
-    };
+    }, [scheduleForm.doctorId, bookingMethod]);
 
     const fetchAvailableDoctors = async () => {
         try {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { adminAPI } from '../../services/api';
 import { setDashboard, setUsers } from '../../redux/slices/adminSlice';
@@ -14,15 +14,7 @@ const AdminDashboard = ({ onLogout }) => {
     const dispatch = useDispatch();
     const { user } = useSelector(state => state.auth);
 
-    useEffect(() => {
-        loadAdminData();
-        // Start polling for admin data updates (silent)
-        const pollInterval = setInterval(pollAdminData, 15000); // Poll every 15 seconds
-
-        return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, []);
-
-    const loadAdminData = async () => {
+    const loadAdminData = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -42,9 +34,9 @@ const AdminDashboard = ({ onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
 
-    const pollAdminData = async () => {
+    const pollAdminData = useCallback(async () => {
         try {
             // Silent polling - no loading states
 
@@ -63,7 +55,15 @@ const AdminDashboard = ({ onLogout }) => {
             // Silent error handling - don't interrupt user experience
             console.debug('Silent admin data polling failed:', err.message);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadAdminData();
+        // Start polling for admin data updates (silent)
+        const pollInterval = setInterval(pollAdminData, 15000); // Poll every 15 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
+    }, [loadAdminData, pollAdminData]);
 
     const renderContent = () => {
         switch (activeView) {

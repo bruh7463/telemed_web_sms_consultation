@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { consultationAPI, prescriptionAPI } from '../../services/api';
 import { setConsultations } from '../../redux/slices/consultSlice';
@@ -17,15 +17,7 @@ const DoctorDashboard = ({ onLogout }) => {
     const dispatch = useDispatch();
     const { user } = useSelector(state => state.auth);
 
-    useEffect(() => {
-        loadDoctorData();
-        // Start polling for dashboard updates
-        const pollInterval = setInterval(loadDoctorData, 10000); // Poll every 10 seconds
-
-        return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, []);
-
-    const loadDoctorData = async () => {
+    const loadDoctorData = useCallback(async () => {
         try {
             // Load consultations silently
             const consultationsRes = await consultationAPI.getDoctorConsultations();
@@ -46,7 +38,15 @@ const DoctorDashboard = ({ onLogout }) => {
             // Still set loading to false on error to prevent infinite loading
             setLoading(false);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadDoctorData();
+        // Start polling for dashboard updates
+        const pollInterval = setInterval(loadDoctorData, 10000); // Poll every 10 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
+    }, [loadDoctorData]);
 
     const handleNavigateToChat = (consultation) => {
         setSelectedConsultationForChat(consultation);

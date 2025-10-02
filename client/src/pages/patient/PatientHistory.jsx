@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
 import { consultationAPI } from '../../services/api';
 import { Calendar, Clock, User, FileText, MessageCircle } from 'lucide-react';
 

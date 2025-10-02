@@ -62,6 +62,23 @@ export const prescriptionAPI = {
     sendPrescriptionSMS: (id) => api.post(`/prescriptions/${id}/send-sms`),
 };
 
+// Medical History endpoints
+export const medicalHistoryAPI = {
+    // Patient endpoints
+    getMyMedicalHistory: () => api.get('/medical-history'),
+    updateMyMedicalHistory: (data) => api.post('/medical-history', data),
+    updateMedicalHistorySection: (section, data) => api.put(`/medical-history/${section}`, data),
+
+    // Doctor/Admin endpoints
+    getPatientMedicalHistory: (patientId) => api.get(`/medical-history/${patientId}`),
+    updatePatientMedicalHistory: (data) => api.post('/medical-history', data),
+    updatePatientMedicalHistorySection: (section, data) => api.put(`/medical-history/${section}`, data),
+    getMedicalHistoryAudit: (patientId, params = {}) => api.get(`/medical-history/audit/${patientId}`, { params }),
+
+    // Common endpoints
+    getMedicalCodes: (category, search = '') => api.get(`/medical-history/codes/${category}`, { params: { search } }),
+};
+
 // Doctor endpoints
 export const doctorAPI = {
     getAvailableDoctors: () => api.get('/doctors/available'),

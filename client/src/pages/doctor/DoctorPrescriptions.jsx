@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { prescriptionAPI, consultationAPI } from '../../services/api';
 import { setPrescriptions } from '../../redux/slices/prescriptionSlice';
@@ -36,12 +36,7 @@ const DoctorPrescriptions = () => {
         index === self.findIndex(p => p._id === patient._id || p.id === patient.id)
     );
 
-    useEffect(() => {
-        loadPrescriptions();
-        loadConsultations();
-    }, []);
-
-    const loadConsultations = async () => {
+    const loadConsultations = useCallback(async () => {
         try {
             console.log('Loading consultations...');
             const res = await consultationAPI.getDoctorConsultations();
@@ -50,9 +45,9 @@ const DoctorPrescriptions = () => {
         } catch (err) {
             console.error('Error loading consultations:', err);
         }
-    };
+    }, [dispatch]);
 
-    const loadPrescriptions = async () => {
+    const loadPrescriptions = useCallback(async () => {
         try {
             console.log('Loading prescriptions...');
             setLoading(true);
@@ -73,7 +68,12 @@ const DoctorPrescriptions = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadPrescriptions();
+        loadConsultations();
+    }, [loadConsultations, loadPrescriptions]);
 
     const handleCreatePrescription = async (e) => {
         e.preventDefault();
@@ -138,18 +138,7 @@ const DoctorPrescriptions = () => {
         }
     };
 
-    const handleUpdatePrescription = async (prescriptionId, updates) => {
-        try {
-            setLoading(true);
-            await prescriptionAPI.updatePrescription(prescriptionId, updates);
-            await loadPrescriptions();
-        } catch (err) {
-            console.error('Error updating prescription:', err);
-            alert('Failed to update prescription');
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     const handleCancelPrescription = async (prescriptionId) => {
         if (!window.confirm('Are you sure you want to cancel this prescription?')) return;

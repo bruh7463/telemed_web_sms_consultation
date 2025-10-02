@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { consultationAPI, prescriptionAPI } from '../../services/api';
 import { setConsultations } from '../../redux/slices/consultSlice';
@@ -8,6 +8,7 @@ import PatientHeader from '../../components/PatientHeader';
 import PatientSidebar from '../../components/PatientSidebar';
 import PatientAppointments from './PatientAppointments';
 import PatientPrescriptions from './PatientPrescriptions';
+import PatientMedicalHistory from './PatientMedicalHistory';
 import PatientHistory from './PatientHistory';
 import PatientChat from './PatientChat';
 
@@ -15,14 +16,9 @@ const PatientDashboard = ({ onLogout }) => {
     const [activeView, setActiveView] = useState('dashboard');
     const [loading, setLoading] = useState(true);
     const dispatch = useDispatch();
-    const navigate = useNavigate();
     const { user } = useSelector(state => state.auth);
 
-    useEffect(() => {
-        loadPatientData();
-    }, []);
-
-    const loadPatientData = async () => {
+    const loadPatientData = useCallback(async () => {
         try {
             setLoading(true);
             console.log('Loading patient data...');
@@ -63,9 +59,13 @@ const PatientDashboard = ({ onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
 
-    const handleNavigateToChat = (consultation) => {
+    useEffect(() => {
+        loadPatientData();
+    }, [loadPatientData]);
+
+    const handleNavigateToChat = () => {
         // For now, just navigate to chat view - PatientChat component will handle consultation selection
         setActiveView('chat');
     };
@@ -76,6 +76,8 @@ const PatientDashboard = ({ onLogout }) => {
                 return <PatientAppointments onNavigateToChat={handleNavigateToChat} />;
             case 'prescriptions':
                 return <PatientPrescriptions />;
+            case 'medical-history':
+                return <PatientMedicalHistory />;
             case 'history':
                 return <PatientHistory />;
             case 'chat':

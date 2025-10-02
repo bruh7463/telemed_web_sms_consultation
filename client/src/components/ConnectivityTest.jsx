@@ -32,19 +32,19 @@ const ConnectivityTest = () => {
                 } else {
                     addResult('Basic Connectivity', '❌ FAILED', `HTTP ${response.status}: ${response.statusText}`);
                 }
-            } catch (error) {
-                addResult('Basic Connectivity', '❌ FAILED', `Network error: ${error.message}`);
+            } catch (networkError) {
+                addResult('Basic Connectivity', '❌ FAILED', `Network error: ${networkError.message}`);
             }
 
             // Test 2: CORS configuration
             addResult('CORS Configuration', 'Testing...', 'Checking CORS headers');
             try {
-                const response = await fetch('http://localhost:5000/api/auth/patient/status', {
+                await fetch('http://localhost:5000/api/auth/patient/status', {
                     method: 'OPTIONS',
                     credentials: 'include'
                 });
                 addResult('CORS Configuration', '✅ SUCCESS', 'CORS headers are properly configured');
-            } catch (error) {
+            } catch {
                 addResult('CORS Configuration', '⚠️ WARNING', 'CORS preflight failed, but may still work');
             }
 

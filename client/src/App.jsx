@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { setAuthenticated, setUser, setRole, logout } from './redux/slices/authSlice';
@@ -21,7 +21,7 @@ function App() {
     console.log('App render - isAuthenticated:', isAuthenticated, 'role:', role, 'loading:', loading);
 
     // Function to check authentication status with the backend
-    const checkAuthStatus = async () => {
+    const checkAuthStatus = useCallback(async () => {
         try {
             // Check all three status endpoints in parallel for efficiency
             const [patientRes, doctorRes, adminRes] = await Promise.allSettled([
@@ -92,11 +92,11 @@ function App() {
             console.error('Unexpected error during authentication check:', err);
             dispatch(logout());
         }
-    };
+    }, [dispatch]);
 
     useEffect(() => {
         checkAuthStatus();
-    }, []);
+    }, [checkAuthStatus]);
 
     const handleLogin = async (credentials, userRole) => {
         try {

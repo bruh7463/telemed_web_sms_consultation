@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { adminAPI } from '../../services/api';
 import { setUsers, addUser, updateUser, removeUser } from '../../redux/slices/adminSlice';
@@ -33,15 +33,7 @@ const AdminUsers = () => {
         isActive: true
     });
 
-    useEffect(() => {
-        loadUsers();
-        // Start polling for user data updates (silent)
-        const pollInterval = setInterval(pollUsers, 5000); // Poll every 5 seconds
-
-        return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, [activeTab]);
-
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         try {
             setLoading(true);
             const res = await adminAPI.getUsers(activeTab);
@@ -51,9 +43,9 @@ const AdminUsers = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [activeTab, dispatch]);
 
-    const pollUsers = async () => {
+    const pollUsers = useCallback(async () => {
         try {
             // Silent polling - no loading states
             const res = await adminAPI.getUsers(activeTab);
@@ -62,7 +54,15 @@ const AdminUsers = () => {
             // Silent error handling - don't interrupt user experience
             console.debug('Silent user polling failed:', err.message);
         }
-    };
+    }, [activeTab, dispatch]);
+
+    useEffect(() => {
+        loadUsers();
+        // Start polling for user data updates (silent)
+        const pollInterval = setInterval(pollUsers, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
+    }, [loadUsers, pollUsers]);
 
     const handleCreateUser = async (e) => {
         e.preventDefault();

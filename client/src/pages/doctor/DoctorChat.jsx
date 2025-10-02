@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { consultationAPI } from '../../services/api';
 import { Send, MessageCircle } from 'lucide-react';
@@ -15,21 +15,7 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
     const consultationsArray = Array.isArray(consultations) ? consultations : [];
     const activeConsultations = consultationsArray.filter(c => c.status === 'ACTIVE');
 
-    useEffect(() => {
-        if (selectedConsultation) {
-            loadMessages();
-            // Start polling for new messages
-            const pollInterval = setInterval(loadMessages, 3000); // Poll every 3 seconds
-
-            return () => clearInterval(pollInterval); // Cleanup on unmount
-        }
-    }, [selectedConsultation]);
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    const loadMessages = async () => {
+    const loadMessages = useCallback(async () => {
         if (!selectedConsultation) return;
 
         try {
@@ -55,7 +41,21 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
             // Silent error handling - don't show errors during background polling
             console.debug('Background message polling failed:', err.message);
         }
-    };
+    }, [selectedConsultation]);
+
+    useEffect(() => {
+        if (selectedConsultation) {
+            loadMessages();
+            // Start polling for new messages
+            const pollInterval = setInterval(loadMessages, 3000); // Poll every 3 seconds
+
+            return () => clearInterval(pollInterval); // Cleanup on unmount
+        }
+    }, [selectedConsultation, loadMessages]);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

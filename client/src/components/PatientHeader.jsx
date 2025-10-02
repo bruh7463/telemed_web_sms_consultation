@@ -1,9 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 
 const PatientHeader = ({ user, onLogout }) => {
-    const navigate = useNavigate();
 
     return (
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">

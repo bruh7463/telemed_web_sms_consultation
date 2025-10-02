@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { prescriptionAPI } from '../../services/api';
 import { setPrescriptions } from '../../redux/slices/prescriptionSlice';
@@ -19,11 +19,7 @@ const AdminPrescriptions = () => {
         return prescription.status === filter.toUpperCase();
     });
 
-    useEffect(() => {
-        loadPrescriptions();
-    }, []);
-
-    const loadPrescriptions = async () => {
+    const loadPrescriptions = useCallback(async () => {
         try {
             console.log('Loading admin prescriptions...');
             setLoading(true);
@@ -43,7 +39,11 @@ const AdminPrescriptions = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadPrescriptions();
+    }, [loadPrescriptions]);
 
     const handleViewPrescription = async (prescriptionId) => {
         try {

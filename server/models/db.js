@@ -142,6 +142,196 @@ adminSchema.pre('save', function(next) {
     next();
 });
 
+// Medical History Schema - Separate entity for scalability
+const medicalHistorySchema = new mongoose.Schema({
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
+
+    // Modular sub-sections for medical history
+    chronicConditions: [{
+        condition: { type: String, required: true }, // Reference to MedicalCode or free text
+        diagnosisDate: { type: Date },
+        status: { type: String, enum: ['active', 'resolved', 'managed'], default: 'active' },
+        notes: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+    }],
+
+    allergies: [{
+        allergen: { type: String, required: true },
+        reaction: { type: String },
+        severity: { type: String, enum: ['mild', 'moderate', 'severe', 'life-threatening'], default: 'mild' },
+        status: { type: String, enum: ['active', 'resolved'], default: 'active' },
+        diagnosedDate: { type: Date },
+        notes: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+    }],
+
+    currentMedications: [{
+        medication: { type: String, required: true }, // Reference to MedicalCode or free text
+        dosage: { type: String },
+        frequency: { type: String },
+        startDate: { type: Date },
+        prescribedBy: { type: String },
+        reason: { type: String },
+        status: { type: String, enum: ['active', 'discontinued', 'completed'], default: 'active' },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+    }],
+
+    pastSurgeries: [{
+        procedure: { type: String, required: true },
+        date: { type: Date, required: true },
+        surgeon: { type: String },
+        hospital: { type: String },
+        complications: { type: String },
+        notes: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+    }],
+
+    familyHistory: [{
+        relation: { type: String, required: true }, // e.g., 'mother', 'father', 'sibling'
+        condition: { type: String, required: true },
+        ageAtDiagnosis: { type: Number },
+        status: { type: String, enum: ['living', 'deceased'], default: 'living' },
+        notes: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+    }],
+
+    socialHistory: {
+        smoking: {
+            status: { type: String, enum: ['never', 'former', 'current'], default: 'never' },
+            packsPerDay: { type: Number },
+            yearsSmoked: { type: Number },
+            quitDate: { type: Date },
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+            updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+        },
+        alcohol: {
+            status: { type: String, enum: ['never', 'occasional', 'moderate', 'heavy'], default: 'never' },
+            drinksPerWeek: { type: Number },
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+            updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+        },
+        occupation: { type: String },
+        exercise: { type: String },
+        diet: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+    },
+
+    vitalSigns: {
+        height: { type: Number }, // in cm
+        weight: { type: Number }, // in kg
+        bmi: { type: Number }, // calculated
+        bloodPressure: {
+            systolic: { type: Number },
+            diastolic: { type: Number },
+            measuredDate: { type: Date }
+        },
+        heartRate: { type: Number },
+        temperature: { type: Number },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'] }
+    },
+
+    // Immunizations
+    immunizations: [{
+        vaccine: { type: String, required: true },
+        dateGiven: { type: Date, required: true },
+        lotNumber: { type: String },
+        administeredBy: { type: String },
+        notes: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+    }],
+
+    // Emergency contacts
+    emergencyContacts: [{
+        name: { type: String, required: true },
+        relationship: { type: String, required: true },
+        phoneNumber: { type: String, required: true },
+        address: { type: String },
+        lastUpdated: { type: Date, default: Date.now },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId }, // Can be patient, doctor, or admin
+        updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+    }],
+
+    // Overall metadata
+    lastUpdated: { type: Date, default: Date.now },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, required: true }, // Can reference Patient, Doctor, or Admin
+    createdByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, required: true }, // Can reference Patient, Doctor, or Admin
+    updatedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true }
+}, { timestamps: true });
+
+// Update lastUpdated when saved
+medicalHistorySchema.pre('save', function(next) {
+    this.lastUpdated = new Date();
+    next();
+});
+
+const MedicalHistory = mongoose.model('MedicalHistory', medicalHistorySchema);
+
+// Medical Code Reference Schema (for controlled vocabularies)
+const medicalCodeSchema = new mongoose.Schema({
+    code: { type: String, required: true, unique: true }, // ICD-10, SNOMED, etc.
+    codeSystem: { type: String, required: true }, // 'ICD-10', 'SNOMED', 'RXNORM', etc.
+    displayName: { type: String, required: true },
+    category: { type: String, required: true }, // 'condition', 'medication', 'procedure', 'allergen', etc.
+    synonyms: [{ type: String }],
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const MedicalCode = mongoose.model('MedicalCode', medicalCodeSchema);
+
+// Medical History Audit Log Schema
+const medicalHistoryAuditSchema = new mongoose.Schema({
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
+    medicalHistory: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalHistory', required: true },
+    action: { type: String, enum: ['create', 'update', 'delete'], required: true },
+    section: { type: String, required: true }, // e.g., 'chronicConditions', 'allergies', etc.
+    field: { type: String }, // specific field that was changed
+    oldValue: { type: mongoose.Schema.Types.Mixed },
+    newValue: { type: mongoose.Schema.Types.Mixed },
+    performedBy: { type: mongoose.Schema.Types.ObjectId, required: true }, // Can reference Patient, Doctor, or Admin
+    performedByType: { type: String, enum: ['patient', 'doctor', 'admin'], required: true },
+    ipAddress: { type: String },
+    userAgent: { type: String },
+    timestamp: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Index for efficient querying
+medicalHistoryAuditSchema.index({ patient: 1, timestamp: -1 });
+medicalHistoryAuditSchema.index({ medicalHistory: 1, timestamp: -1 });
+
+const MedicalHistoryAudit = mongoose.model('MedicalHistoryAudit', medicalHistoryAuditSchema);
+
 const Admin = mongoose.model('Admin', adminSchema);
 
-module.exports = { connectDB, Patient, Doctor, Consultation, TemporaryBookingReference, Prescription, Admin };
+module.exports = {
+    connectDB,
+    Patient,
+    Doctor,
+    Consultation,
+    TemporaryBookingReference,
+    Prescription,
+    Admin,
+    MedicalHistory,
+    MedicalCode,
+    MedicalHistoryAudit
+};

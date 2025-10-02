@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { setConsultations } from '../redux/slices/consultSlice';
 import { consultationAPI } from '../services/api.js';
 import Header from '../components/Header/Header';
@@ -9,12 +9,12 @@ import ConsultationList from '../components/ConsultationList';
 import ChatWindow from '../components/ChatWindow';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 
-const DashboardPage = ({ onLogout }) => {
+const DashboardPage = () => {
     const dispatch = useDispatch();
     const [selectedConsultation, setSelectedConsultation] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchConsultations = async () => {
+    const fetchConsultations = useCallback(async () => {
         try {
             const res = await consultationAPI.getAll();
             dispatch(setConsultations(res.data));
@@ -28,13 +28,13 @@ const DashboardPage = ({ onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch, selectedConsultation]);
 
     useEffect(() => {
         fetchConsultations();
         const interval = setInterval(fetchConsultations, 15000); // Poll every 15 seconds
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchConsultations]);
 
     return (
         <div className="dashboard-container">

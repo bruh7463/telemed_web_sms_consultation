@@ -31,6 +31,7 @@ app.use('/api/sms', require('./routes/sms'));
 app.use('/api/doctors', require('./routes/doctor_routes'));
 app.use('/api/patients', require('./routes/patient_routes'));
 app.use('/api/prescriptions', require('./routes/prescriptions'));
+app.use('/api/medical-history', require('./routes/medical_history'));
 
 // --- REMINDER SERVICE ---
 require('./services/reminders');

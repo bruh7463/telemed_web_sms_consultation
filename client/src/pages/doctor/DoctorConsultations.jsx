@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { consultationAPI } from '../../services/api';
 import { setConsultations } from '../../redux/slices/consultSlice';
@@ -12,15 +12,7 @@ const DoctorConsultations = ({ onNavigateToChat }) => {
     // Ensure data is in array format
     const consultationsArray = Array.isArray(consultations) ? consultations : [];
 
-    useEffect(() => {
-        loadConsultations();
-        // Start polling for consultation updates
-        const pollInterval = setInterval(loadConsultations, 8000); // Poll every 8 seconds
-
-        return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, []);
-
-    const loadConsultations = async () => {
+    const loadConsultations = useCallback(async () => {
         try {
             const res = await consultationAPI.getDoctorConsultations();
             dispatch(setConsultations(res.data));
@@ -28,7 +20,15 @@ const DoctorConsultations = ({ onNavigateToChat }) => {
             // Silent error handling - don't interrupt user experience
             console.debug('Background consultation polling failed:', err.message);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadConsultations();
+        // Start polling for consultation updates
+        const pollInterval = setInterval(loadConsultations, 8000); // Poll every 8 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
+    }, [loadConsultations]);
 
     const handleCompleteConsultation = async (consultationId) => {
         if (!window.confirm('Mark this consultation as completed?')) return;

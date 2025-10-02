@@ -19,8 +19,8 @@ const ChatWindow = ({ consultation, onUpdate }) => {
             await api.post(`/consultations/${consultation._id}/messages`, { content: message });
             setMessage('');
             onUpdate(); // Refresh consultations
-        } catch (err) {
-            console.error("Failed to send message", err);
+        } catch (error) {
+            console.error("Failed to send message", error);
             alert("Error sending message.");
         } finally {
             setIsSending(false);
@@ -32,7 +32,7 @@ const ChatWindow = ({ consultation, onUpdate }) => {
              try {
                 await api.patch(`/consultations/${consultation._id}/complete`);
                 onUpdate();
-            } catch(err){
+            } catch {
                 alert("Error completing consultation.")
             }
         }

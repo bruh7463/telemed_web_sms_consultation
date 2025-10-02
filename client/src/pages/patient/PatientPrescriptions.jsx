@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { prescriptionAPI } from '../../services/api';
 import { setPrescriptions } from '../../redux/slices/prescriptionSlice';
@@ -19,15 +19,7 @@ const PatientPrescriptions = () => {
     const completedPrescriptions = prescriptionsArray.filter(p => p.status === 'COMPLETED');
     const cancelledPrescriptions = prescriptionsArray.filter(p => p.status === 'CANCELLED');
 
-    useEffect(() => {
-        loadPrescriptions();
-        // Start polling for prescription updates (silent)
-        const pollInterval = setInterval(pollPrescriptions, 15000); // Poll every 15 seconds
-
-        return () => clearInterval(pollInterval); // Cleanup on unmount
-    }, []);
-
-    const loadPrescriptions = async () => {
+    const loadPrescriptions = useCallback(async () => {
         try {
             console.log('Loading patient prescriptions...');
             setLoading(true);
@@ -47,9 +39,9 @@ const PatientPrescriptions = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
 
-    const pollPrescriptions = async () => {
+    const pollPrescriptions = useCallback(async () => {
         try {
             // Silent polling - no loading states or user interruption
             const res = await prescriptionAPI.getPatientPrescriptions();
@@ -59,7 +51,15 @@ const PatientPrescriptions = () => {
             // Silent error handling - don't interrupt user experience
             console.debug('Silent prescription polling failed:', err.message);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        loadPrescriptions();
+        // Start polling for prescription updates (silent)
+        const pollInterval = setInterval(pollPrescriptions, 15000); // Poll every 15 seconds
+
+        return () => clearInterval(pollInterval); // Cleanup on unmount
+    }, [loadPrescriptions, pollPrescriptions]);
 
     const handleViewPrescription = async (prescriptionId) => {
         try {

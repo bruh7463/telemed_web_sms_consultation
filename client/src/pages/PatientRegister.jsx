@@ -63,7 +63,7 @@ const PatientRegister = () => {
         }
 
         // Phone number validation (basic)
-        const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
+        const phoneRegex = /^\+?[\d\s\-()]+$/;
         if (!phoneRegex.test(formData.phoneNumber)) {
             setError('Please enter a valid phone number');
             return false;
