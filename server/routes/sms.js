@@ -6,7 +6,7 @@ const router = express.Router();
 const { Patient, Consultation, TemporaryBookingReference, Prescription } = require('../models/db');
 const { detectIntent } = require('../services/dialogflow');
 const { sendSms } = require('../services/textbee_sms')
-const { createAndScheduleConsultation, bookConsultationSlot, cancelAppointment, rescheduleAppointment, getUpcomingAppointments } = require('../logic/logic');
+const { createAndScheduleConsultation, bookConsultationSlot, cancelAppointment, rescheduleAppointment, getUpcomingAppointments, evaluateTriage } = require('../logic/logic');
 const dialogflow = require('@google-cloud/dialogflow');
 const client = new dialogflow.ContextsClient();
 
@@ -51,7 +51,7 @@ router.post('/incoming', async (req, res) => {
         }
         
         if (!patient.dialogflowSessionId) {
-            patient.dialogflowSessionId = `projects/${process.env.DIALOGFLOW_PROJECT_ID}/agent/sessions/${patient._id}`;
+            patient.dialogflowSessionId = `${patient._id}`; // Store only session name, not full path
             await patient.save();
         }
 
@@ -248,9 +248,19 @@ router.post('/incoming', async (req, res) => {
             await existingConsultation.save();
             // No automated response when routing to doctor, typically a human will reply.
         } else {
-            // --- ROUTE TO CHATBOT ---
+        // --- ROUTE TO CHATBOT ---
             console.log(`Routing message to Dialogflow for patient ${patient._id}`);
-            const dialogflowResult = await detectIntent(process.env.DIALOGFLOW_PROJECT_ID, patient.dialogflowSessionId, content);
+
+            // Ensure sessionId is just the session name, not full path (migrate old data)
+            let sessionId = patient.dialogflowSessionId;
+            if (sessionId && sessionId.startsWith('projects/')) {
+                const parts = sessionId.split('/');
+                sessionId = parts[parts.length - 1]; // Get last part (session name)
+                patient.dialogflowSessionId = sessionId; // Update in database
+                await patient.save();
+            }
+
+            const dialogflowResult = await detectIntent(process.env.DIALOGFLOW_PROJECT_ID, sessionId, content);
             const intentName = dialogflowResult.intent.displayName;
             const params = dialogflowResult.parameters.fields;
 
@@ -285,7 +295,8 @@ router.post('/incoming', async (req, res) => {
                 if (!firstName || !lastName || !nrc || !dateOfBirth || !gender || !address) {
                     console.error("Missing required parameters (first_name, last_name, or nrc) from Dialogflow.");
                     await sendSms(from, TEXTBEE_SENDER_ID, 'Please must sure you enter all required details. Type "book consultation" to restart the process.');
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId);
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
                     return res.status(400).send("Missing parameters from Dialogflow.");
                 }
                 
@@ -296,23 +307,27 @@ router.post('/incoming', async (req, res) => {
                 if (existingPatientNRC) {
 
                     await sendSms(from, TEXTBEE_SENDER_ID, `A patient with NRC ${nrc} already exists. Type 'book consultation' and use the 'Returning Patient' option.`);
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId); 
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
 
                 } else if (existingPatientNRC && existingPatientNRC.phoneNumber !== from) {
                     
                     // NRC exists but phone number is different
                     await sendSms(from, TEXTBEE_SENDER_ID, `A patient with NRC ${nrc} is already registered with a different phone number. Please ensure you are using the correct number or register with a unique NRC. Type 'book consultation' to restart the process.`);
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId); 
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
 
                 } else if (existingPatientPhone) {
 
                     await sendSms(from, TEXTBEE_SENDER_ID, `A patient with phone number ${from} already exists. Type 'book consultation' and use the 'Returning Patient' option.`);
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId);
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
 
                 } else if (nrc.length < 9 || nrc.length > 9) {
 
                     await sendSms(from, TEXTBEE_SENDER_ID, `The NRC number ${nrc} is invalid. Please ensure it is exactly 9 characters long. Type 'book consultation' to restart the process.`);
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId); 
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
                 
                 } else {
                     patient.name = name;
@@ -330,13 +345,14 @@ router.post('/incoming', async (req, res) => {
                 
                 if (!nrc) {
                     await sendSms(from, TEXTBEE_SENDER_ID, "I'm sorry, I didn't catch your NRC number. Please provide it again by typing 'book consultation' to restart the process.");
-                    await clearContexts(patient._id);
-                    await patient.save();
+                    await clearContexts(patient.dialogflowSessionId); 
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
                     return res.status(400).send("Missing NRC from Dialogflow.");
 
                 } else if (existingPatientPhone ==! from) {
                     await sendSms(from, TEXTBEE_SENDER_ID, `A patient with phone number ${from} already exists. Type 'book consultation' and use the 'Returning Patient' option.`);
-                    await clearContexts(patient._id);
+                    await clearContexts(patient.dialogflowSessionId); 
+                    patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
                     await patient.save();
                     return res.status(400).send("Phone number already associated with another patient.");
                 } else {
@@ -350,14 +366,15 @@ router.post('/incoming', async (req, res) => {
                             patient.dateOfBirth = foundPatient.dateOfBirth;
                             patient.gender = foundPatient.gender;
                             patient.address = foundPatient.address;
-                            // Linking the session to the found patient
-                            patient.dialogflowSessionId = `projects/${process.env.DIALOGFLOW_PROJECT_ID}/agent/sessions/${foundPatient._id}`;
-                            await patient.save(); 
+                            // Linking the session to the found patient (store only session name)
+                            patient.dialogflowSessionId = `${foundPatient._id}`;
+                            await patient.save();
                         }
                         await sendSms(from, TEXTBEE_SENDER_ID, dialogflowResult.fulfillmentText);
                     } else {
                         await sendSms(from, TEXTBEE_SENDER_ID, `Sorry, we couldn't find a patient with NRC ${nrc} and this phone number. Type 'book consultation' and use the 'New Patient' option to register.`);
-                        await clearContexts(patient._id);
+                        await clearContexts(patient.dialogflowSessionId); 
+                        patient.dialogflowSessionId = `${patient._id}_${Date.now()}`;
                         await patient.save();
                     }
                 }
@@ -411,14 +428,24 @@ router.post('/incoming', async (req, res) => {
                 } else {
                     const reason = params.reason.stringValue;
 
-                    if (reason) { 
+                    if (reason && reason.toLowerCase() !== "book consultation") {
+                        // Book with the provided reason
                         await createAndScheduleConsultation(patient, reason);
                     } else {
-                        // This case might occur if allRequiredParamsPresent is true but reason is somehow empty,
-                        // or if Dialogflow provided a fulfillmentText without a specific action.
-                        await sendSms(from, TEXTBEE_SENDER_ID, dialogflowResult.fulfillmentText);
+                        // If reason is "book consultation", it means Dialogflow extracted the phrase incorrectly
+                        // Clear contexts and reset the session by generating a new session ID
+                        await clearContexts(patient.dialogflowSessionId);
+                        patient.dialogflowSessionId = `${patient._id}_${Date.now()}`; 
+                        await patient.save();
+                        console.log(`Reset Dialogflow session for patient ${patient._id} to ${patient.dialogflowSessionId}`);
                     }
                 }
+            } else if (intentName === 'TriageResults') {
+                const triageMessage = evaluateTriage(params);
+                await sendSms(from, TEXTBEE_SENDER_ID, triageMessage);
+
+                // Optionally clear contexts after triage to reset
+                await clearContexts(patient._id);
             } else {
                 await sendSms(from, TEXTBEE_SENDER_ID, dialogflowResult.fulfillmentText);
             }

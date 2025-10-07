@@ -162,4 +162,11 @@ export const setAuthToken = token => {
     }
 };
 
+// Test/Developer endpoints (SMS simulator)
+export const testAPI = {
+    getSmsLog: () => api.get('/test/sms-log'),
+    getSmsCount: () => api.get('/test/sms-count'),
+    clearSmsLog: () => api.delete('/test/sms-log'),
+};
+
 export default api;

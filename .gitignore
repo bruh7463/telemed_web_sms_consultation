@@ -25,3 +25,4 @@ telemed-bot-v2-ykmj-d72070dddaec.json
 *.sw?
 .env
 /dist
+/chatbot

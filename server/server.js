@@ -32,6 +32,8 @@ app.use('/api/doctors', require('./routes/doctor_routes'));
 app.use('/api/patients', require('./routes/patient_routes'));
 app.use('/api/prescriptions', require('./routes/prescriptions'));
 app.use('/api/medical-history', require('./routes/medical_history'));
+app.use('/api/dialogflow', require('./routes/dialogflow_webhook'));
+app.use('/api/test', require('./routes/test_routes'));
 
 // --- REMINDER SERVICE ---
 require('./services/reminders');

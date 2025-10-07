@@ -12,6 +12,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import PatientSetPassword from './pages/patient/PatientSetPassword';
 import PatientRegister from './pages/PatientRegister';
 import ConnectivityTest from './components/ConnectivityTest';
+import SMSTestingPage from './pages/SMSTestingPage';
 
 function App() {
     const dispatch = useDispatch();
@@ -220,6 +221,10 @@ function App() {
                 <Route
                     path="/connectivity-test"
                     element={<ConnectivityTest />}
+                />
+                <Route
+                    path="/sms-test"
+                    element={<SMSTestingPage />}
                 />
                 <Route
                     path="/patient/set-password"

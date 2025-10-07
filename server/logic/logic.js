@@ -374,11 +374,111 @@ async function getUpcomingAppointments(patient) {
     }
 }
 
-module.exports = { 
-    findAvailableDoctor, 
-    createAndScheduleConsultation, 
+/**
+ * Evaluates symptom parameters from Dialogflow and determines triage level and recommendation.
+ * @param {object} params - The parameters object from Dialogflow result (fields)
+ * @returns {string} - The triage message with recommendation
+ */
+function evaluateTriage(params) {
+    const severityScores = {
+        // Lower score = more severe (1 is highest severity)
+        'Less than 3 days': 4,
+        '3-7 days': 3,
+        '1-2 weeks': 2,
+        'More than 2 weeks': 1,
+
+        'Dry cough': 4,
+        'Cough with phlegm': 3,
+        'Coughing up blood': 1,
+        'Barking cough': 2,
+
+        'Yes, severe (can\u0027t complete sentences)': 1,
+        'Yes, moderate (short of breath with activity)': 2,
+        'Mild (only with heavy activity)': 3,
+        'No difficulty': 4,
+
+        'Yes, severe crushing pain': 1,
+        'Yes, moderate pain': 2,
+        'Mild discomfort': 3,
+        'No chest pain': 4,
+
+        'Watery diarrhea': 3,
+        'Bloody diarrhea': 1,
+        'Diarrhea with mucus': 2,
+        'No diarrhea': 4,
+
+        'Severe pain': 1,
+        'Moderate pain': 2,
+        'Mild cramps': 3,
+        'No abdominal pain': 4,
+
+        'Extreme fatigue (can\u0027t do daily activities)': 1,
+        'Moderate fatigue': 2,
+        'Mild tiredness': 3,
+        'No fatigue': 4,
+
+        'Significant weight loss (\u003e5kg)': 1,
+        'Moderate weight loss (2-5kg)': 2,
+        'Slight weight loss': 3,
+        'No weight change': 4,
+        'Weight gain': 5
+    };
+
+    // Extract parameters with defaults
+    const fever = params.fever_duration?.stringValue || '3-7 days';
+    const cough = params.cough_type?.stringValue || 'Dry cough';
+    const breath = params.breathing_difficulty?.stringValue || 'No difficulty';
+    const chest = params.chest_pain?.stringValue || 'No chest pain';
+    const diarrhea = params.diarrhea_type?.stringValue || 'No diarrhea';
+    const abdominal = params.abdominal_pain?.stringValue || 'No abdominal pain';
+    const fatigue = params.fatigue_level?.stringValue || 'Mild tiredness';
+    const weight = params.weight_change?.stringValue || 'No weight change';
+
+    // Get scores, using 4 for unknown
+    const scores = [
+        severityScores[fever] || 4,
+        severityScores[cough] || 4,
+        severityScores[breath] || 4,
+        severityScores[chest] || 4,
+        severityScores[diarrhea] || 4,
+        severityScores[abdominal] || 4,
+        severityScores[fatigue] || 4,
+        severityScores[weight] || 4
+    ];
+
+    // Emergency conditions (highest priority)
+    const emergencyScore = Math.min(...scores);
+    if (emergencyScore === 1 &&
+        scores[2] === 1 || // severe breathing
+        scores[3] === 1 || // severe chest pain
+        scores[5] === 1 && scores[4] === 1) { // severe abdominal + bloody diarrhea
+        return "EMERGENCY: Seek immediate medical attention at the nearest hospital or call emergency services. Do not drive yourself.";
+    }
+
+    // Urgent care
+    if (emergencyScore === 1 ||
+        (scores[2] === 2 && scores[3] === 2)) { // moderate breath + chest
+        return "URGENT: Contact the hospital for immediate evaluation. Visit the ER or call emergency services.";
+    }
+
+    // Need doctor consultation
+    const averageScore = scores.reduce((a, b) => a + b) / scores.length;
+    if (averageScore < 3 ||
+        scores[2] <= 3 || // breathing issues
+        scores[3] <= 2) { // chest pain
+        return "SCHEDULE CONSULTATION: Schedule a doctor's appointment immediately for evaluation. In the meantime, rest and monitor your symptoms.";
+    }
+
+    // General advice
+    return "MONITOR SYMPTOMS: Continue to monitor your symptoms. If they worsen or new symptoms develop, seek medical attention. Consider self-care measures like rest, hydration, and over-the-counter medications as appropriate.";
+}
+
+module.exports = {
+    findAvailableDoctor,
+    createAndScheduleConsultation,
     bookConsultationSlot,
     cancelAppointment,
     rescheduleAppointment,
-    getUpcomingAppointments
+    getUpcomingAppointments,
+    evaluateTriage
 };
