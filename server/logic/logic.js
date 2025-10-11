@@ -1,8 +1,11 @@
 // File: server/logic/logic.js
 // Description: Contains core business logic.
+// Updated: Now uses enhanced triage system with comprehensive medical dictionary
+// following Zambia Standard Treatment Guidelines (STG)
 
 const { Doctor, Consultation } = require('../models/db');
 const { sendSms } = require('../services/textbee_sms');
+const { enhancedTriage } = require('./medical_dictionary');
 
 async function findAvailableDoctor() {
     return await Doctor.findOne().sort({ workload: 1 });
@@ -376,101 +379,170 @@ async function getUpcomingAppointments(patient) {
 
 /**
  * Evaluates symptom parameters from Dialogflow and determines triage level and recommendation.
+ * Uses enhanced pattern recognition from comprehensive medical dictionary following Zambia STG.
  * @param {object} params - The parameters object from Dialogflow result (fields)
  * @returns {string} - The triage message with recommendation
  */
 function evaluateTriage(params) {
-    const severityScores = {
-        // Lower score = more severe (1 is highest severity)
-        'Less than 3 days': 4,
-        '3-7 days': 3,
-        '1-2 weeks': 2,
-        'More than 2 weeks': 1,
+    // Map Dialogflow parameters to symptom format expected by medical dictionary
+    const userSymptoms = {};
 
-        'Dry cough': 4,
-        'Cough with phlegm': 3,
-        'Coughing up blood': 1,
-        'Barking cough': 2,
+    // Extract Dialogflow parameters
+    const feverDuration = params.fever_duration?.stringValue;
+    const coughType = params.cough_type?.stringValue;
+    const breathingDifficulty = params.breathing_difficulty?.stringValue;
+    const chestPain = params.chest_pain?.stringValue;
+    const diarrheaType = params.diarrhea_type?.stringValue;
+    const abdominalPain = params.abdominal_pain?.stringValue;
+    const fatigueLevel = params.fatigue_level?.stringValue;
+    const weightChange = params.weight_change?.stringValue;
 
-        'Yes, severe (can\u0027t complete sentences)': 1,
-        'Yes, moderate (short of breath with activity)': 2,
-        'Mild (only with heavy activity)': 3,
-        'No difficulty': 4,
-
-        'Yes, severe crushing pain': 1,
-        'Yes, moderate pain': 2,
-        'Mild discomfort': 3,
-        'No chest pain': 4,
-
-        'Watery diarrhea': 3,
-        'Bloody diarrhea': 1,
-        'Diarrhea with mucus': 2,
-        'No diarrhea': 4,
-
-        'Severe pain': 1,
-        'Moderate pain': 2,
-        'Mild cramps': 3,
-        'No abdominal pain': 4,
-
-        'Extreme fatigue (can\u0027t do daily activities)': 1,
-        'Moderate fatigue': 2,
-        'Mild tiredness': 3,
-        'No fatigue': 4,
-
-        'Significant weight loss (\u003e5kg)': 1,
-        'Moderate weight loss (2-5kg)': 2,
-        'Slight weight loss': 3,
-        'No weight change': 4,
-        'Weight gain': 5
-    };
-
-    // Extract parameters with defaults
-    const fever = params.fever_duration?.stringValue || '3-7 days';
-    const cough = params.cough_type?.stringValue || 'Dry cough';
-    const breath = params.breathing_difficulty?.stringValue || 'No difficulty';
-    const chest = params.chest_pain?.stringValue || 'No chest pain';
-    const diarrhea = params.diarrhea_type?.stringValue || 'No diarrhea';
-    const abdominal = params.abdominal_pain?.stringValue || 'No abdominal pain';
-    const fatigue = params.fatigue_level?.stringValue || 'Mild tiredness';
-    const weight = params.weight_change?.stringValue || 'No weight change';
-
-    // Get scores, using 4 for unknown
-    const scores = [
-        severityScores[fever] || 4,
-        severityScores[cough] || 4,
-        severityScores[breath] || 4,
-        severityScores[chest] || 4,
-        severityScores[diarrhea] || 4,
-        severityScores[abdominal] || 4,
-        severityScores[fatigue] || 4,
-        severityScores[weight] || 4
-    ];
-
-    // Emergency conditions (highest priority)
-    const emergencyScore = Math.min(...scores);
-    if (emergencyScore === 1 &&
-        scores[2] === 1 || // severe breathing
-        scores[3] === 1 || // severe chest pain
-        scores[5] === 1 && scores[4] === 1) { // severe abdominal + bloody diarrhea
-        return "EMERGENCY: Seek immediate medical attention at the nearest hospital or call emergency services. Do not drive yourself.";
+    // Map fever duration to pattern
+    if (feverDuration) {
+        userSymptoms.fever = true;
+        if (feverDuration === 'Less than 3 days') {
+            userSymptoms.fever_pattern = 'fever_acute';
+        } else if (feverDuration === '3-7 days') {
+            userSymptoms.fever_pattern = 'fever_subacute';
+        } else if (feverDuration === '1-2 weeks') {
+            userSymptoms.fever_pattern = 'fever_persistent';
+        } else if (feverDuration === 'More than 2 weeks') {
+            userSymptoms.fever_pattern = 'fever_chronic';
+        }
     }
 
-    // Urgent care
-    if (emergencyScore === 1 ||
-        (scores[2] === 2 && scores[3] === 2)) { // moderate breath + chest
-        return "URGENT: Contact the hospital for immediate evaluation. Visit the ER or call emergency services.";
+    // Map cough type
+    if (coughType) {
+        userSymptoms.cough = true;
+        if (coughType === 'Dry cough') {
+            userSymptoms.cough_pattern = 'cough_dry';
+        } else if (coughType === 'Cough with phlegm') {
+            userSymptoms.cough_pattern = 'cough_productive';
+        } else if (coughType === 'Coughing up blood') {
+            userSymptoms.cough_pattern = 'cough_bloody';
+            userSymptoms.hemoptysis = true;
+        } else if (coughType === 'Barking cough') {
+            userSymptoms.cough_pattern = 'cough_barking';
+        }
     }
 
-    // Need doctor consultation
-    const averageScore = scores.reduce((a, b) => a + b) / scores.length;
-    if (averageScore < 3 ||
-        scores[2] <= 3 || // breathing issues
-        scores[3] <= 2) { // chest pain
-        return "SCHEDULE CONSULTATION: Schedule a doctor's appointment immediately for evaluation. In the meantime, rest and monitor your symptoms.";
+    // Map breathing difficulty
+    if (breathingDifficulty) {
+        if (breathingDifficulty === 'Yes, severe (can\'t complete sentences)') {
+            userSymptoms.severe_shortness_of_breath = true;
+            userSymptoms.breathing_pattern = 'breathing_severe';
+        } else if (breathingDifficulty === 'Yes, moderate (short of breath with activity)') {
+            userSymptoms.breathing_difficulty = true;
+            userSymptoms.breathing_pattern = 'breathing_moderate';
+        } else if (breathingDifficulty === 'Mild (only with heavy activity)') {
+            userSymptoms.breathing_difficulty = true;
+            userSymptoms.breathing_pattern = 'breathing_mild';
+        }
+        // 'No difficulty' means no symptom
     }
 
-    // General advice
-    return "MONITOR SYMPTOMS: Continue to monitor your symptoms. If they worsen or new symptoms develop, seek medical attention. Consider self-care measures like rest, hydration, and over-the-counter medications as appropriate.";
+    // Map chest pain
+    if (chestPain) {
+        if (chestPain === 'Yes, severe crushing pain' || chestPain === 'Yes, moderate pain') {
+            userSymptoms.chest_pain = true;
+        } else if (chestPain === 'Mild discomfort') {
+            userSymptoms.chest_pain = true;
+        }
+        // 'No chest pain' means no symptom
+    }
+
+    // Map diarrhea
+    if (diarrheaType) {
+        if (diarrheaType === 'Watery diarrhea') {
+            userSymptoms.diarrhea = true;
+            userSymptoms.diarrhea_type = 'diarrhea_watery';
+        } else if (diarrheaType === 'Bloody diarrhea') {
+            userSymptoms.diarrhea = true;
+            userSymptoms.diarrhea_type = 'diarrhea_bloody';
+            userSymptoms.bloody_diarrhea = true;
+        } else if (diarrheaType === 'Diarrhea with mucus') {
+            userSymptoms.diarrhea = true;
+            userSymptoms.diarrhea_type = 'diarrhea_mucoid';
+        }
+        // 'No diarrhea' means no symptom
+    }
+
+    // Map abdominal pain
+    if (abdominalPain) {
+        if (abdominalPain === 'Severe pain') {
+            userSymptoms.abdominal_pain = true;
+            userSymptoms.severe_abdominal_pain = true;
+        } else if (abdominalPain === 'Moderate pain') {
+            userSymptoms.abdominal_pain = true;
+        } else if (abdominalPain === 'Mild cramps') {
+            userSymptoms.abdominal_pain = true;
+        }
+        // 'No abdominal pain' means no symptom
+    }
+
+    // Map fatigue
+    if (fatigueLevel) {
+        if (fatigueLevel === 'Extreme fatigue (can\'t do daily activities)') {
+            userSymptoms.extreme_fatigue = true;
+        } else if (fatigueLevel === 'Moderate fatigue') {
+            userSymptoms.fatigue = true;
+        } else if (fatigueLevel === 'Mild tiredness') {
+            userSymptoms.fatigue = true;
+        }
+        // 'No fatigue' means no symptom
+    }
+
+    // Map weight change
+    if (weightChange) {
+        if (weightChange === 'Significant weight loss (>5kg)') {
+            userSymptoms.significant_weight_loss = true;
+            userSymptoms.weight_loss = true;
+        } else if (weightChange === 'Moderate weight loss (2-5kg)') {
+            userSymptoms.weight_loss = true;
+        } else if (weightChange === 'Slight weight loss') {
+            userSymptoms.weight_loss = true;
+        } else if (weightChange === 'Weight gain') {
+            userSymptoms.weight_gain = true;
+        }
+        // 'No weight change' means no symptom
+    }
+
+    // Add common symptoms that might be missing but are key for diagnosis
+    if (feverDuration && feverDuration.includes('fever')) {
+        userSymptoms.fever = true;
+    }
+
+    // Call enhanced triage with comprehensive medical dictionary
+    const triageResult = enhancedTriage(userSymptoms);
+    console.log('Enhanced triage result:', triageResult);
+
+    // Format result into user-friendly message
+    let triageMessage = '';
+
+    // Add disease-specific recommendations
+    if (triageResult.possible_conditions && triageResult.possible_conditions.length > 0) {
+        const topCondition = triageResult.possible_conditions[0];
+        triageMessage += `Based on your symptoms, the most likely condition is ${topCondition.disease}. `;
+        triageMessage += `Confidence: ${Math.round(topCondition.confidence)}%\n\n`;
+    }
+
+    // Add urgency level and recommendations
+    if (triageResult.urgency_level === 'emergency') {
+        triageMessage += "🚨 EMERGENCY: " + triageResult.recommendations[0] +
+            "\n\nImmediate actions:\n" + triageResult.actions.join('\n');
+    } else if (triageResult.urgency_level === 'urgent') {
+        triageMessage += "⚠️ URGENT: " + triageResult.recommendations[0] +
+            "\n\nRecommended actions:\n" + triageResult.actions.join('\n');
+    } else {
+        triageMessage += "📋 " + triageResult.recommendations[0] +
+            "\n\nRecommended actions:\n" + triageResult.actions.join('\n');
+    }
+
+    // Add general advice
+    triageMessage += "\n\n⚕️ Medical advice: This assessment follows Zambia Standard Treatment Guidelines. " +
+                     "Please seek care at your nearest health facility. If symptoms worsen, seek immediate attention.";
+
+    return triageMessage;
 }
 
 module.exports = {

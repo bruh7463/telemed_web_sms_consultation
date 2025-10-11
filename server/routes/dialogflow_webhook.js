@@ -5,6 +5,10 @@ const express = require('express');
 const router = express.Router();
 const { evaluateTriage } = require('../logic/logic');
 const { Doctor } = require('../models/db');
+const { enhancedTriage, getNextQuestion, questionMappings: medicalQuestionMappings } = require('../logic/medical_dictionary');
+
+// In-memory conversation state storage (in production, use Redis/database)
+const conversationStates = new Map();
 
 /**
  * Maps symptom category names to IDs
@@ -129,11 +133,41 @@ router.post('/', async (req, res) => {
                     const category = categoryNameToId[inputCategory.toLowerCase()] || inputCategory;
                     responseText = `You selected: ${categoryNames[category] || 'Unknown category'}.\n\nTo help me assess your situation, I need to ask you a few specific questions about your symptoms. Please answer as accurately as possible.`;
 
-                    // Get relevant questions for this category and ask the first one
-                    const relevantQuestions = categoryMappings[category] || [];
-                    if (relevantQuestions.length > 0) {
-                        const firstQuestion = questionMappings[relevantQuestions[0]];
-                        responseText += `\n\n${firstQuestion || 'What symptoms are you experiencing?'}`;
+                    // Use medical dictionary to determine the first medically-relevant question
+                    // For now, start with a basic assessment to determine next questions
+                    const initialSymptoms = {}; // No symptoms collected yet
+                    const nextQuestion = getNextQuestion(initialSymptoms);
+
+                    if (!nextQuestion.completed) {
+                        // Format question with options
+                        let formattedQuestion = nextQuestion.question;
+
+                        // Add numbered options if available
+                        if (nextQuestion.options && nextQuestion.options.length > 0) {
+                            formattedQuestion += '\n\nPlease reply with the number of your choice:\n';
+                            nextQuestion.options.forEach((option, index) => {
+                                formattedQuestion += `(${index + 1}) ${option}\n`;
+                            });
+                        }
+
+                        responseText += `\n\n${formattedQuestion}`;
+
+                        // Create conversation state to track first question
+                        const conversationKey = `${sessionId}_symptoms`;
+                        const conversationState = {
+                            symptoms: {},
+                            category: category,
+                            step: 0
+                        };
+                        conversationStates.set(conversationKey, conversationState);
+                        conversationStates.set(conversationKey + '_lastquestion', nextQuestion);
+
+                        // Create an empty symptom context to start collecting answers
+                        outputContexts.push({
+                            name: `projects/${projectId}/agent/sessions/${sessionId}/contexts/symptomanswers`,
+                            lifespanCount: 10,
+                            parameters: {}
+                        });
                     } else {
                         responseText += '\n\nWhat symptoms are you experiencing?';
                     }
@@ -152,47 +186,126 @@ router.post('/', async (req, res) => {
                 break;
 
             case 'SymptomQuestions':
-                const categoryContext = contexts.find(ctx => ctx.name.includes('/symptomcategory'));
-                const selectedCategory = categoryContext?.parameters?.selected_category;
+                // Backend-driven symptom assessment using medical dictionary
+                const conversationKey = `${sessionId}_symptoms`;
 
-                if (selectedCategory) {
-                    const relevantParams = categoryMappings[selectedCategory] || [];
-                    // Check if all relevant params are filled
-                    let filledParamsCount = relevantParams.filter(param => params[param]?.stringValue || params[param]).length;
+                // Get current conversation state
+                let conversationState = conversationStates.get(conversationKey) || {
+                    symptoms: {},
+                    category: null,
+                    step: 0
+                };
 
-                    // If user provided a numeric response, try to fill the next unfulfilled parameter
-                    const query = queryResult.queryText?.trim();
-                    if (/^[1-5]$/.test(query)) {  // Numeric response
-                        const numericResponse = query;
-                        const nextParam = relevantParams.find(param => !params[param]?.stringValue && !params[param]);
-                        if (nextParam) {
-                            params[nextParam] = { stringValue: numericResponse };
-                            filledParamsCount = relevantParams.filter(param => params[param]?.stringValue || params[param]).length;
-                        }
+                // Get category from context if not set
+                if (!conversationState.category) {
+                    const categoryContext = contexts.find(ctx => ctx.name.includes('/symptomcategory'));
+                    if (categoryContext?.parameters?.selected_category) {
+                        conversationState.category = categoryContext.parameters.selected_category;
+                    } else if (categoryContext?.parameters?.fields?.selected_category?.stringValue) {
+                        conversationState.category = categoryContext.parameters.fields.selected_category.stringValue;
                     }
-
-                    if (filledParamsCount < relevantParams.length) {
-                        // Ask next question
-                        const nextParam = relevantParams.find(param => !params[param]?.stringValue && !params[param]);
-                        if (nextParam) {
-                            responseText = questionMappings[nextParam] || 'Please answer the next question.';
-                        } else {
-                            responseText = 'Please answer the questions to proceed.';
-                        }
-                    } else {
-                        // All questions answered, provide triage assessment
-                        // Convert params to format expected by evaluateTriage
-                        const triageParams = {};
-                        for (const param in params) {
-                            triageParams[param] = params[param]?.stringValue || params[param] || '';
-                        }
-                        responseText = "Based on your symptoms, here is my assessment:\n\n" + evaluateTriage(triageParams) +
-                            "\n\nIf your condition worsens or you need immediate help, please contact emergency services or go to the nearest hospital." +
-                            "\n\nFor follow-up care, you can schedule a consultation.";
-                    }
-                } else {
-                    responseText = 'Please start with symptom checking first. Type "check symptoms" to begin.';
                 }
+
+                // Process user's response to the LAST question asked
+                const userInput = queryResult.queryText?.trim();
+                const lastQuestionResponse = conversationStates.get(conversationKey + '_lastquestion');
+
+                if (lastQuestionResponse) {
+                    // Find which question key this corresponds to (inverse mapping)
+                    let questionKey = null;
+                    for (const [key, questionData] of Object.entries(medicalQuestionMappings)) {
+                        if (questionData.question === lastQuestionResponse.question) {
+                            questionKey = key;
+                            break;
+                        }
+                    }
+
+                    // Map numeric responses to actual symptom parameters
+                    if (/^[1-4]$/.test(userInput)) {
+                        const numericChoice = parseInt(userInput);
+                        if (lastQuestionResponse.mapping && lastQuestionResponse.options) {
+                            const selectedOption = lastQuestionResponse.options[numericChoice - 1];
+                            const parameterName = lastQuestionResponse.mapping[selectedOption];
+
+                            if (parameterName && typeof parameterName === 'string') {
+                                conversationState.symptoms[parameterName] = 'present';
+                                // Also mark the question as answered for progression tracking
+                                if (questionKey) {
+                                    conversationState.symptoms[questionKey] = true;
+                                }
+                                console.log(`Mapped response "${numericChoice}" to parameter "${parameterName}" for question "${questionKey}"`);
+                            }
+                        }
+                    }
+                }
+
+                // Get next medical question based on updated symptoms
+                const nextQuestion = getNextQuestion(conversationState.symptoms);
+
+                if (nextQuestion.completed || nextQuestion.question.includes('assessment')) {
+                    // Assessment complete - provide triage
+                    console.log('Symptom assessment completed:', conversationState.symptoms);
+
+                    const triageResult = enhancedTriage(conversationState.symptoms);
+                    let assessmentText = `Based on your symptoms, you may be experiencing:\n\n`;
+
+                    // Format triage results
+                    triageResult.possible_conditions.forEach((condition, index) => {
+                        assessmentText += `${index + 1}. ${condition.disease} (${condition.confidence}% likelihood)\n`;
+                    });
+
+                    assessmentText += `\nUrgency Level: ${triageResult.urgency_level.toUpperCase()}\n\n`;
+                    assessmentText += `Recommendations:\n`;
+                    triageResult.recommendations.forEach(rec => {
+                        assessmentText += `• ${rec}\n`;
+                    });
+
+                    assessmentText += `\nActions:\n`;
+                    triageResult.actions.forEach(action => {
+                        assessmentText += `• ${action}\n`;
+                    });
+
+                    responseText = assessmentText +
+                        "\n\nIf your condition worsens or you need immediate help, please contact emergency services or go to the nearest hospital." +
+                        "\n\nFor follow-up care, you can schedule a consultation.";
+
+                    // Clear conversation state
+                    conversationStates.delete(conversationKey);
+                    conversationStates.delete(conversationKey + '_lastquestion');
+
+                    // Close symptom contexts
+                    outputContexts.push({
+                        name: `projects/${projectId}/agent/sessions/${sessionId}/contexts/symptomcategory`,
+                        lifespanCount: 0,
+                        parameters: {}
+                    });
+                    outputContexts.push({
+                        name: `projects/${projectId}/agent/sessions/${sessionId}/contexts/symptomanswers`,
+                        lifespanCount: 0,
+                        parameters: {}
+                    });
+
+                } else {
+                    // Ask next question with options
+                    let formattedQuestion = nextQuestion.question;
+
+                    // Add numbered options if available
+                    if (nextQuestion.options && nextQuestion.options.length > 0) {
+                        formattedQuestion += '\n\nPlease reply with the number of your choice:\n';
+                        nextQuestion.options.forEach((option, index) => {
+                            formattedQuestion += `(${index + 1}) ${option}\n`;
+                        });
+                    }
+
+                    responseText = formattedQuestion;
+
+                    // Store this question for response mapping
+                    conversationStates.set(conversationKey + '_lastquestion', nextQuestion);
+
+                    // Save conversation state
+                    conversationStates.set(conversationKey, conversationState);
+                }
+
                 break;
 
             case 'TriageResults':
