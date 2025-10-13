@@ -40,7 +40,7 @@ const TEST_SCENARIOS = {
  */
 async function simulateSMS(from, message) {
     try {
-        console.log(`\n📱 Simulating SMS from ${from}: "${message}"`);
+        console.log(`\nSimulating SMS from ${from}: "${message}"`);
 
         const payload = {
             webhookEvent: 'MESSAGE_RECEIVED',
@@ -55,10 +55,10 @@ async function simulateSMS(from, message) {
             }
         });
 
-        console.log(`✅ Response: ${response.status} - ${response.data}`);
+        console.log(`Response: ${response.status} - ${response.data}`);
 
     } catch (error) {
-        console.error(`❌ Error: ${error.response?.status} - ${error.response?.data || error.message}`);
+        console.error(`Error: ${error.response?.status} - ${error.response?.data || error.message}`);
     }
 }
 
@@ -67,7 +67,7 @@ async function simulateSMS(from, message) {
  */
 async function createTestPatient(phoneNumber, name = 'Test Patient', nrc = '123456789') {
     try {
-        console.log(`\n👤 Creating test patient: ${name} (${phoneNumber})`);
+        console.log(`\nCreating test patient: ${name} (${phoneNumber})`);
 
         const response = await axios.post(`${BASE_URL}/api/auth/register/patient`, {
             phoneNumber,
@@ -79,10 +79,10 @@ async function createTestPatient(phoneNumber, name = 'Test Patient', nrc = '1234
             address: 'Test Address'
         });
 
-        console.log(`✅ Patient created: ${response.data.message}`);
+        console.log(`Patient created: ${response.data.message}`);
         return true;
     } catch (error) {
-        console.log(`ℹ️  Patient may already exist: ${error.response?.data?.message || error.message}`);
+        console.log(`Patient may already exist: ${error.response?.data?.message || error.message}`);
         return false;
     }
 }
@@ -91,7 +91,7 @@ async function createTestPatient(phoneNumber, name = 'Test Patient', nrc = '1234
  * Run a specific test scenario
  */
 async function runTest(scenario, phoneNumber = TEST_PHONE_NUMBERS.patient1) {
-    console.log(`\n🧪 Running test: ${scenario}`);
+    console.log(`\nRunning test: ${scenario}`);
 
     switch (scenario) {
         case 'setup':
@@ -128,7 +128,7 @@ async function runTest(scenario, phoneNumber = TEST_PHONE_NUMBERS.patient1) {
             break;
 
         case 'all':
-            console.log('\n🚀 Running all SMS tests...');
+            console.log('\nRunning all SMS tests...');
             await runTest('setup');
             await runTest('viewAppointments');
             await runTest('cancel');
@@ -137,7 +137,7 @@ async function runTest(scenario, phoneNumber = TEST_PHONE_NUMBERS.patient1) {
             break;
 
         default:
-            console.log('❓ Unknown test scenario. Available tests:');
+            console.log('Unknown test scenario. Available tests:');
             console.log('   setup - Create test patients');
             console.log('   cancel - Test appointment cancellation');
             console.log('   cancelSpecific - Test specific appointment cancellation');
@@ -154,7 +154,7 @@ async function runTest(scenario, phoneNumber = TEST_PHONE_NUMBERS.patient1) {
 const args = process.argv.slice(2);
 if (args.length === 0) {
     console.log(`
-🤖 SMS Testing Script
+SMS Testing Script
 Usage: node test_sms.js <test_scenario> [phone_number]
 
 Available test scenarios:

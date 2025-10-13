@@ -1,76 +1,177 @@
 import { useState } from 'react';
-import { authAPI } from '../services/api';
 
 const ConnectivityTest = () => {
-    const [testResults, setTestResults] = useState([]);
+    const [tests, setTests] = useState([
+        {
+            testName: 'Basic Connectivity',
+            endpoint: 'http://localhost:5000',
+            expectedOutcome: 'Server is reachable',
+            actualOutcome: '',
+            result: '',
+            status: 'pending' // pending, testing, success, fail
+        },
+        {
+            testName: 'CORS Configuration',
+            endpoint: 'OPTIONS /api/auth/patient/status',
+            expectedOutcome: 'Allow-Origin header',
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        },
+        {
+            testName: 'Patient Status API',
+            endpoint: 'GET /api/auth/patient/status',
+            expectedOutcome: '401 (Unauthenticated)',
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        },
+        {
+            testName: 'Doctor Status API',
+            endpoint: 'GET /api/auth/doctor/status',
+            expectedOutcome: '401 (Unauthenticated)',
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        },
+        {
+            testName: 'Admin Status API',
+            endpoint: 'GET /api/auth/admin/status',
+            expectedOutcome: '401 (Unauthenticated)',
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        },
+        {
+            testName: 'Patient Consultations API',
+            endpoint: 'GET /api/consultations/patient',
+            expectedOutcome: '401 (Unauthenticated)',
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        }
+    ]);
     const [isTesting, setIsTesting] = useState(false);
 
-    const addResult = (test, result, details = '') => {
-        setTestResults(prev => [...prev, {
-            test,
-            result,
-            details,
-            timestamp: new Date().toLocaleTimeString()
-        }]);
+    const updateTest = (index, updates) => {
+        setTests(prev => prev.map((test, i) =>
+            i === index ? { ...test, ...updates } : test
+        ));
     };
 
     const runConnectivityTests = async () => {
         setIsTesting(true);
-        setTestResults([]);
+        // Reset all tests to pending state
+        setTests(prev => prev.map(test => ({
+            ...test,
+            actualOutcome: '',
+            result: '',
+            status: 'pending'
+        })));
 
         try {
-            // Test 1: Basic connectivity
-            addResult('Basic Connectivity', 'Testing...', 'Checking if backend server is reachable');
+            // Test 1: Basic Connectivity - localhost:5000
+            updateTest(0, { status: 'testing' });
+            try {
+                const response = await fetch('http://localhost:5000', {
+                    method: 'GET',
+                    credentials: 'omit'
+                });
+                if (response.ok || response.status === 404) { // 404 is ok for root endpoint, server is reachable
+                    updateTest(0, {
+                        actualOutcome: `HTTP ${response.status}`,
+                        result: 'SUCCESS',
+                        status: 'success'
+                    });
+                } else {
+                    updateTest(0, {
+                        actualOutcome: `HTTP ${response.status}`,
+                        result: 'FAILED',
+                        status: 'fail'
+                    });
+                }
+            } catch (error) {
+                updateTest(0, {
+                    actualOutcome: 'Network Error',
+                    result: 'FAILED',
+                    status: 'fail'
+                });
+            }
+
+            // Test 2: CORS Configuration - OPTIONS /api/auth/patient/status
+            updateTest(1, { status: 'testing' });
             try {
                 const response = await fetch('http://localhost:5000/api/auth/patient/status', {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-                // 401 is expected when not authenticated, so we consider it a success for connectivity
-                if (response.status === 401 || response.ok) {
-                    addResult('Basic Connectivity', '✅ SUCCESS', 'Backend server is running and reachable');
-                } else {
-                    addResult('Basic Connectivity', '❌ FAILED', `HTTP ${response.status}: ${response.statusText}`);
-                }
-            } catch (networkError) {
-                addResult('Basic Connectivity', '❌ FAILED', `Network error: ${networkError.message}`);
-            }
-
-            // Test 2: CORS configuration
-            addResult('CORS Configuration', 'Testing...', 'Checking CORS headers');
-            try {
-                await fetch('http://localhost:5000/api/auth/patient/status', {
                     method: 'OPTIONS',
-                    credentials: 'include'
+                    credentials: 'omit'
                 });
-                addResult('CORS Configuration', '✅ SUCCESS', 'CORS headers are properly configured');
-            } catch {
-                addResult('CORS Configuration', '⚠️ WARNING', 'CORS preflight failed, but may still work');
+
+                if (response.status === 200 || response.status === 204) {
+                    updateTest(1, {
+                        actualOutcome: 'Headers present',
+                        result: 'SUCCESS',
+                        status: 'success'
+                    });
+                } else {
+                    updateTest(1, {
+                        actualOutcome: `HTTP ${response.status}`,
+                        result: 'FAILED',
+                        status: 'fail'
+                    });
+                }
+            } catch (error) {
+                updateTest(1, {
+                    actualOutcome: 'Preflight failed',
+                    result: 'FAILED',
+                    status: 'fail'
+                });
             }
 
-            // Test 3: API endpoints
-            const endpoints = [
-                { name: 'Patient Status', url: '/auth/patient/status' },
-                { name: 'Doctor Status', url: '/auth/doctor/status' },
-                { name: 'Admin Status', url: '/auth/admin/status' },
-                { name: 'Patient Consultations', url: '/consultations/patient' },
-                { name: 'Patient Prescriptions', url: '/prescriptions' }
+            // Test 3-6: Status APIs (expect 401 for unauthenticated)
+            const statusTests = [
+                { index: 2, url: '/api/auth/patient/status' },
+                { index: 3, url: '/api/auth/doctor/status' },
+                { index: 4, url: '/api/auth/admin/status' },
+                { index: 5, url: '/api/consultations/patient' }
             ];
 
-            for (const endpoint of endpoints) {
-                addResult(`${endpoint.name} API`, 'Testing...', `Testing ${endpoint.url}`);
+            for (const test of statusTests) {
+                updateTest(test.index, { status: 'testing' });
                 try {
-                    const response = await authAPI.get(endpoint.url);
-                    addResult(`${endpoint.name} API`, '✅ SUCCESS', `Status: ${response.status}`);
+                    const response = await fetch(`http://localhost:5000${test.url}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                    if (response.status === 401) {
+                        updateTest(test.index, {
+                            actualOutcome: 'HTTP 401',
+                            result: 'SUCCESS',
+                            status: 'success'
+                        });
+                    } else {
+                        updateTest(test.index, {
+                            actualOutcome: `HTTP ${response.status}`,
+                            result: 'FAILED',
+                            status: 'fail'
+                        });
+                    }
                 } catch (error) {
-                    const status = error.response?.status || 'Network Error';
-                    const message = error.response?.data?.message || error.message;
-                    addResult(`${endpoint.name} API`, '❌ FAILED', `Status: ${status} - ${message}`);
+                    updateTest(test.index, {
+                        actualOutcome: 'Network Error',
+                        result: 'FAILED',
+                        status: 'fail'
+                    });
                 }
             }
 
         } catch (error) {
-            addResult('Test Execution', '❌ ERROR', `Unexpected error: ${error.message}`);
+            console.error('Test execution error:', error);
+            // Mark all remaining pending tests as error
+            setTests(prev => prev.map(test =>
+                test.status === 'testing' || test.status === 'pending'
+                    ? { ...test, actualOutcome: 'Error', result: 'FAILED', status: 'fail' }
+                    : test
+            ));
         } finally {
             setIsTesting(false);
         }
@@ -92,34 +193,54 @@ const ConnectivityTest = () => {
                 </button>
             </div>
 
-            {testResults.length > 0 && (
-                <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-gray-900">Test Results:</h3>
-                    <div className="space-y-2">
-                        {testResults.map((result, index) => (
-                            <div key={index} className="p-4 border rounded-md bg-gray-50">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="font-medium text-gray-900">{result.test}</span>
-                                    <span className="text-sm text-gray-500">{result.timestamp}</span>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <span className={`font-medium ${
-                                        result.result.includes('✅') ? 'text-green-600' :
-                                        result.result.includes('❌') ? 'text-red-600' :
-                                        result.result.includes('⚠️') ? 'text-yellow-600' :
-                                        'text-blue-600'
+            <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-300 rounded-lg">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint/Target</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Outcome</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actual Outcome</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {tests.map((test, index) => (
+                            <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{test.testName}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{test.endpoint}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{test.expectedOutcome}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                        test.status === 'testing' ? 'bg-blue-100 text-blue-800' :
+                                        test.status === 'success' ? 'bg-green-100 text-green-800' :
+                                        test.status === 'fail' ? 'bg-red-100 text-red-800' :
+                                        'bg-gray-100 text-gray-800'
                                     }`}>
-                                        {result.result}
+                                        {test.status === 'testing' && 'Testing...'}
+                                        {test.status === 'success' && test.actualOutcome}
+                                        {test.status === 'fail' && test.actualOutcome}
+                                        {test.status === 'pending' && '-'}
                                     </span>
-                                </div>
-                                {result.details && (
-                                    <p className="text-sm text-gray-600 mt-1">{result.details}</p>
-                                )}
-                            </div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                        test.status === 'success' ? 'bg-green-100 text-green-800' :
+                                        test.status === 'fail' ? 'bg-red-100 text-red-800' :
+                                        test.status === 'testing' ? 'bg-blue-100 text-blue-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {test.status === 'testing' && 'Running'}
+                                        {test.status === 'success' && 'SUCCESS'}
+                                        {test.status === 'fail' && 'FAILED'}
+                                        {test.status === 'pending' && 'Pending'}
+                                    </span>
+                                </td>
+                            </tr>
                         ))}
-                    </div>
-                </div>
-            )}
+                    </tbody>
+                </table>
+            </div>
 
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
                 <h4 className="font-semibold text-blue-900 mb-2">Troubleshooting Tips:</h4>
