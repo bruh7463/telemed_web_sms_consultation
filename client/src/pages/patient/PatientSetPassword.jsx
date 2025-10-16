@@ -44,9 +44,9 @@ const PatientSetPassword = () => {
     };
 
     if (!patientId) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-100">
-                <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+            <div className="w-full max-w-md p-6 sm:p-8 space-y-4 sm:space-y-6 bg-white rounded-lg shadow-md">
                     <p className="text-red-500 text-center">Invalid access. Please login first.</p>
                 </div>
             </div>
@@ -73,7 +73,6 @@ const PatientSetPassword = () => {
                             onChange={onChange}
                             required
                             minLength={6}
-                            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
 
@@ -86,7 +85,6 @@ const PatientSetPassword = () => {
                             onChange={onChange}
                             required
                             minLength={6}
-                            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
 

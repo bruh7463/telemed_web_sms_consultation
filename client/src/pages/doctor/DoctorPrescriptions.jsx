@@ -421,6 +421,14 @@ const DoctorPrescriptions = () => {
                                             >
                                                 Delete
                                             </button>
+                                        ) : prescription.status === 'COMPLETED' ? (
+                                            <button
+                                                onClick={() => handleDeletePrescription(prescription._id || prescription.id)}
+                                                disabled={loading}
+                                                className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                                            >
+                                                Delete
+                                            </button>
                                         ) : (
                                             <button
                                                 onClick={() => handleCancelPrescription(prescription._id || prescription.id)}

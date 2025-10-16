@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { Route, Routes, Navigate } from 'react-router-dom';
+import { Route, Routes, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { setAuthenticated, setUser, setRole, logout } from './redux/slices/authSlice';
 import { setUserData } from './redux/slices/appSlice';
@@ -11,11 +11,14 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import PatientSetPassword from './pages/patient/PatientSetPassword';
 import PatientRegister from './pages/PatientRegister';
+import AdminLoginPage from './pages/AdminLoginPage';
 import ConnectivityTest from './components/ConnectivityTest';
 import SMSTestingPage from './pages/SMSTestingPage';
 
 function App() {
     const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const location = useLocation();
     const { isAuthenticated, loading, role } = useSelector(state => state.auth);
 
     // Debug logging for authentication state changes
@@ -152,12 +155,19 @@ function App() {
     };
 
     const handleLogout = async () => {
+        const currentRole = role; // Capture role before logout clears it
         try {
             await authAPI.logout();
         } catch (err) {
             console.error('Error logging out:', err);
         } finally {
             dispatch(logout());
+            // Use React Router navigation for smooth transitions without page reload
+            if (currentRole === 'admin') {
+                navigate('/admin/login');
+            } else {
+                navigate('/login');
+            }
         }
     };
 
@@ -225,6 +235,39 @@ function App() {
                 <Route
                     path="/sms-test"
                     element={<SMSTestingPage />}
+                />
+                <Route
+                    path="/admin/login"
+                    element={
+                        isAuthenticated ? (
+                            <Navigate to={getDashboardRoute()} replace />
+                        ) : (
+                            <AdminLoginPage onLogin={handleLogin} />
+                        )
+                    }
+                />
+                <Route
+                    path="/admin/*"
+                    element={isAuthenticated && role === 'admin' ? (
+                        <AdminDashboard onLogout={() => {
+                            // use React Router navigation for smooth transition without page reload
+                            const redirectAdminAfterLogout = async () => {
+                                try {
+                                    await authAPI.logout();
+                                    console.log('Admin logout API call completed');
+                                } catch (err) {
+                                    console.error('Error logging out:', err);
+                                } finally {
+                                    dispatch(logout());
+                                    // Use React Router navigation instead of window.location for smooth redirect
+                                    navigate('/admin/login');
+                                }
+                            };
+                            redirectAdminAfterLogout();
+                        }} />
+                    ) : (
+                        <Navigate to="/admin/login" replace />
+                    )}
                 />
                 <Route
                     path="/patient/set-password"

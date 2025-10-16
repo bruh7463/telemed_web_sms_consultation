@@ -23,6 +23,27 @@
 
   input {
     @apply border-none outline-none transition-all duration-200;
+    /* Improve touch targets on mobile */
+    @apply min-h-[44px] sm:min-h-0;
+  }
+
+  /* Better label visibility on mobile */
+  label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+
+  /* Form elements responsive improvements */
+  input, textarea, select {
+    @apply w-full px-3 py-3 sm:py-2 border border-gray-300 rounded-lg sm:rounded-md shadow-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+    @apply transition-all duration-200;
+  }
+
+  /* Mobile-specific form improvements */
+  @media (max-width: 640px) {
+    .form-field {
+      @apply mb-4;
+    }
   }
 
   a {

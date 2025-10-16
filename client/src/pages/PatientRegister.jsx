@@ -139,8 +139,8 @@ const PatientRegister = () => {
     }
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 py-8">
-            <div className="w-full max-w-2xl p-8 space-y-6 bg-white rounded-lg shadow-md">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4 py-8">
+            <div className="w-full max-w-2xl p-6 sm:p-8 space-y-4 sm:space-y-6 bg-white rounded-lg shadow-md">
                 <div className="text-center">
                     <h2 className="text-3xl font-bold text-gray-900">Patient Registration</h2>
                     <p className="text-gray-600 mt-2">
@@ -167,7 +167,6 @@ const PatientRegister = () => {
                                 value={formData.name}
                                 onChange={onChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Enter your full name"
                             />
                         </div>
@@ -182,7 +181,6 @@ const PatientRegister = () => {
                                 value={formData.phoneNumber}
                                 onChange={onChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="+260XXXXXXXXX"
                             />
                         </div>
@@ -200,7 +198,6 @@ const PatientRegister = () => {
                             onChange={onChange}
                             required
                             maxLength={9}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="XXXXXXXXX"
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -221,7 +218,6 @@ const PatientRegister = () => {
                                 onChange={onChange}
                                 required
                                 minLength={6}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Enter your password"
                             />
                             <p className="text-xs text-gray-500 mt-1">
@@ -240,7 +236,6 @@ const PatientRegister = () => {
                                 onChange={onChange}
                                 required
                                 minLength={6}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Confirm your password"
                             />
                         </div>
@@ -258,7 +253,6 @@ const PatientRegister = () => {
                                 value={formData.dateOfBirth}
                                 onChange={onChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
 
@@ -271,7 +265,6 @@ const PatientRegister = () => {
                                 value={formData.gender}
                                 onChange={onChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
                                 <option value="">Select Gender</option>
                                 <option value="male">Male</option>
@@ -291,7 +284,6 @@ const PatientRegister = () => {
                             onChange={onChange}
                             rows={3}
                             required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Enter your full address"
                         />
                     </div>

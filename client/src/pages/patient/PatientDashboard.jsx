@@ -117,11 +117,11 @@ const PatientDashboardHome = ({ onNavigateToChat }) => {
     const consultationsArray = Array.isArray(consultations) ? consultations : [];
     const prescriptionsArray = Array.isArray(prescriptions) ? prescriptions : [];
 
-    const upcomingAppointments = consultationsArray.filter(c => {
-        // Only show future appointments or currently active ones
+    const scheduledAppointments = consultationsArray.filter(c => {
+        // Only show future appointments or currently pending ones, not active consultations
         const appointmentTime = new Date(c.scheduledStart);
         const now = new Date();
-        return (appointmentTime >= now || c.status === 'ACTIVE') && (c.status === 'PENDING' || c.status === 'ACTIVE');
+        return appointmentTime >= now && c.status === 'PENDING';
     });
 
     const activeConsultations = consultationsArray.filter(c => c.status === 'ACTIVE');
@@ -139,8 +139,8 @@ const PatientDashboardHome = ({ onNavigateToChat }) => {
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
-                    <h3 className="text-lg font-semibold text-gray-900">Upcoming Appointments</h3>
-                    <p className="text-3xl font-bold text-blue-600 mt-2">{upcomingAppointments.length}</p>
+                    <h3 className="text-lg font-semibold text-gray-900">Scheduled Appointments</h3>
+                    <p className="text-3xl font-bold text-blue-600 mt-2">{scheduledAppointments.length}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <h3 className="text-lg font-semibold text-gray-900">Active Prescriptions</h3>

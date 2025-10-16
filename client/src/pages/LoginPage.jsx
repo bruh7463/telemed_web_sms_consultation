@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 
 const LoginPage = ({ onLogin }) => {
     const [formData, setFormData] = useState({ email: '', password: '', phoneNumber: '' });
-    const [role, setRole] = useState('patient');
+    const [role, setRole] = useState('doctor');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
@@ -33,9 +33,6 @@ const LoginPage = ({ onLogin }) => {
             const result = await onLogin(credentials, role);
             console.log('Login successful, result:', result);
 
-            // The onLogin function should handle the redirect
-            // If it doesn't, we can add navigation here
-            // navigate('/dashboard');
         } catch (err) {
             const errorMessage = err.message;
             console.log('Login error:', err); // Debug logging
@@ -59,9 +56,9 @@ const LoginPage = ({ onLogin }) => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-                <h2 className="text-2xl font-bold text-center text-gray-900">Telemedicine Portal Login</h2>
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+            <div className="w-full max-w-md p-6 sm:p-8 space-y-4 sm:space-y-6 bg-white rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold text-center text-gray-900">Telemed Portal Login</h2>
 
                 {/* Role Selection */}
                 <div>
@@ -69,11 +66,10 @@ const LoginPage = ({ onLogin }) => {
                     <select
                         value={role}
                         onChange={(e) => setRole(e.target.value)}
-                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="bg-white mt-1"
                     >
-                        <option value="patient">Patient</option>
                         <option value="doctor">Doctor</option>
-                        <option value="admin">Admin</option>
+                        <option value="patient">Patient</option>
                     </select>
                 </div>
 
@@ -90,24 +86,24 @@ const LoginPage = ({ onLogin }) => {
                                 onChange={onChange}
                                 required
                                 placeholder="+260XXXXXXXXX"
-                                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                className="border-2 border-gray-400 p-2 rounded-md"
                             />
                             <p className="text-xs text-gray-500 mt-1">
                                 If you already registered through SMS? Enter your phone number and leave password blank.
                             </p>
                         </div>
                     ) : (
-                        <div>
-                            <label className="text-sm font-medium text-gray-700">Email</label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={onChange}
-                                required
-                                className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
-                        </div>
+                    <div>
+                        <label className="text-sm font-medium text-gray-700">Email</label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={onChange}
+                            className="border-2 border-gray-400 p-2 rounded-md"
+                            required
+                        />
+                    </div>
                     )}
 
                     <div>
@@ -117,7 +113,7 @@ const LoginPage = ({ onLogin }) => {
                             name="password"
                             value={formData.password}
                             onChange={onChange}
-                            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            className="border-2 border-gray-400 p-2 rounded-md"
                         />
                     </div>
 

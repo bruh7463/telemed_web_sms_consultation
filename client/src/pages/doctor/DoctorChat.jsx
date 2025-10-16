@@ -341,7 +341,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.patient && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    👤 Personal Information
+                    Personal Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -373,7 +373,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.allergies && medicalHistory.allergies.length > 0 && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    🚫 Allergies
+                    Allergies
                 </h3>
                 <div className="space-y-3">
                     {medicalHistory.allergies.map((allergy, index) => (
@@ -404,7 +404,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.chronicConditions && medicalHistory.chronicConditions.length > 0 && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    🏥 Chronic Conditions
+                    Chronic Conditions
                 </h3>
                 <div className="space-y-3">
                     {medicalHistory.chronicConditions.map((condition, index) => (
@@ -435,7 +435,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.currentMedications && medicalHistory.currentMedications.length > 0 && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    💊 Current Medications
+                    Current Medications
                 </h3>
                 <div className="space-y-3">
                     {medicalHistory.currentMedications.map((medication, index) => (
@@ -482,7 +482,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.socialHistory && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    🌟 Social History
+                    Social History
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Smoking */}
@@ -538,7 +538,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.familyHistory && medicalHistory.familyHistory.length > 0 && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    👨‍👩‍👧‍👦 Family History
+                    Family History
                 </h3>
                 <div className="space-y-3">
                     {medicalHistory.familyHistory.map((member, index) => (
@@ -559,7 +559,7 @@ const MedicalHistoryOverview = ({ medicalHistory }) => (
         {medicalHistory.emergencyContacts && medicalHistory.emergencyContacts.length > 0 && (
             <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    🚑 Emergency Contacts
+                    Emergency Contacts
                 </h3>
                 <div className="space-y-3">
                     {medicalHistory.emergencyContacts.map((contact, index) => (

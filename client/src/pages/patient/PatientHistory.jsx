@@ -155,7 +155,7 @@ const PatientHistory = () => {
                                             <div className="flex items-start space-x-2">
                                                 <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                                                 <div>
-                                                    <p className="text-sm font-medium text-gray-700">Reason for visit:</p>
+                                                    <p className="text-sm font-medium text-gray-700">Reason for consultation:</p>
                                                     <p className="text-sm text-gray-600 mt-1">{consultation.bookingReason}</p>
                                                 </div>
                                             </div>
