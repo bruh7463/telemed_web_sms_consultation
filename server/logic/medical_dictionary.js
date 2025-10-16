@@ -769,6 +769,464 @@ const questionMappings = {
       'Mild cramps': 'abdominal_pain',
       'No abdominal pain': 'no_abdominal_pain'
     }
+  },
+
+  // Additional question mappings referenced in disease definitions
+  headache_severity: {
+    question: 'How severe is your headache?',
+    options: ['Mild headache', 'Moderate headache', 'Severe headache', 'No headache'],
+    mapping: {
+      'Mild headache': 'headache',
+      'Moderate headache': 'headache',
+      'Severe headache': 'severe_headache',
+      'No headache': 'no_headache'
+    }
+  },
+
+  chills_presence: {
+    question: 'Are you experiencing chills or shivering?',
+    options: ['Yes, severe chills', 'Yes, mild chills', 'No chills'],
+    mapping: {
+      'Yes, severe chills': 'chills',
+      'Yes, mild chills': 'chills',
+      'No chills': 'no_chills'
+    }
+  },
+
+  recurrent_infections: {
+    question: 'Have you had frequent or recurrent infections?',
+    options: ['Yes, multiple times this year', 'Yes, occasionally', 'No recurrent infections'],
+    mapping: {
+      'Yes, multiple times this year': 'recurrent_infections',
+      'Yes, occasionally': 'recurrent_infections',
+      'No recurrent infections': 'no_recurrent_infections'
+    }
+  },
+
+  weight_loss_amount: {
+    question: 'How much weight have you lost recently?',
+    options: ['Significant (>5kg)', 'Moderate (2-5kg)', 'Mild (<2kg)', 'No weight loss'],
+    mapping: {
+      'Significant (>5kg)': 'significant_weight_loss',
+      'Moderate (2-5kg)': 'moderate_weight_loss',
+      'Mild (<2kg)': 'mild_weight_loss',
+      'No weight loss': 'no_weight_loss'
+    }
+  },
+
+  chronic_fatigue: {
+    question: 'How would you describe your fatigue?',
+    options: ['Extreme fatigue (can\'t do daily activities)', 'Moderate fatigue', 'Mild tiredness', 'No fatigue'],
+    mapping: {
+      'Extreme fatigue (can\'t do daily activities)': 'extreme_fatigue',
+      'Moderate fatigue': 'moderate_fatigue',
+      'Mild tiredness': 'mild_fatigue',
+      'No fatigue': 'no_fatigue'
+    }
+  },
+
+  risk_factors: {
+    question: 'Do you have any risk factors for HIV?',
+    options: ['Yes, I have risk factors', 'No specific risk factors'],
+    mapping: {
+      'Yes, I have risk factors': 'risk_factors_present',
+      'No specific risk factors': 'no_risk_factors'
+    }
+  },
+
+  previous_testing: {
+    question: 'Have you previously been tested for HIV?',
+    options: ['Yes, I have been tested', 'No, I haven\'t been tested'],
+    mapping: {
+      'Yes, I have been tested': 'previous_hiv_test',
+      'No, I haven\'t been tested': 'no_previous_test'
+    }
+  },
+
+  cough_duration: {
+    question: 'How long have you had this cough?',
+    options: ['Less than 2 weeks', '2-4 weeks', 'More than 1 month', 'More than 3 months'],
+    mapping: {
+      'Less than 2 weeks': 'acute_cough',
+      '2-4 weeks': 'subacute_cough',
+      'More than 1 month': 'chronic_cough',
+      'More than 3 months': 'persistent_cough'
+    }
+  },
+
+  sputum_production: {
+    question: 'Are you producing sputum/phlegm?',
+    options: ['Yes, lots of sputum', 'Yes, some sputum', 'Blood stained sputum', 'No sputum'],
+    mapping: {
+      'Yes, lots of sputum': 'sputum_production',
+      'Yes, some sputum': 'sputum_production',
+      'Blood stained sputum': 'hemoptysis',
+      'No sputum': 'no_sputum'
+    }
+  },
+
+  night_sweats: {
+    question: 'Are you experiencing night sweats?',
+    options: ['Yes, severe night sweats', 'Yes, mild night sweats', 'No night sweats'],
+    mapping: {
+      'Yes, severe night sweats': 'night_sweats',
+      'Yes, mild night sweats': 'night_sweats',
+      'No night sweats': 'no_night_sweats'
+    }
+  },
+
+  tb_exposure: {
+    question: 'Have you been exposed to someone with tuberculosis?',
+    options: ['Yes, close contact with TB patient', 'Yes, possibly exposed', 'No known exposure'],
+    mapping: {
+      'Yes, close contact with TB patient': 'tb_contact',
+      'Yes, possibly exposed': 'possible_tb_contact',
+      'No known exposure': 'no_tb_exposure'
+    }
+  },
+
+  hiv_status: {
+    question: 'Are you HIV positive?',
+    options: ['Yes, I am HIV positive', 'No, I am HIV negative', 'I don\'t know my status'],
+    mapping: {
+      'Yes, I am HIV positive': 'hiv_positive',
+      'No, I am HIV negative': 'hiv_negative',
+      'I don\'t know my status': 'unknown_hiv_status'
+    }
+  },
+
+  // Additional questions that may be used
+  discharge_type: {
+    question: 'What type of discharge are you experiencing?',
+    options: ['Clear or white discharge', 'Yellow/green discharge', 'Bloody discharge', 'No discharge'],
+    mapping: {
+      'Clear or white discharge': 'discharge',
+      'Yellow/green discharge': 'discharge',
+      'Bloody discharge': 'bloody_discharge',
+      'No discharge': 'no_discharge'
+    }
+  },
+
+  ulcer_presence: {
+    question: 'Are you experiencing genital ulcers?',
+    options: ['Yes, painful ulcers', 'Yes, painless ulcers', 'No ulcers'],
+    mapping: {
+      'Yes, painful ulcers': 'genital_ulcers',
+      'Yes, painless ulcers': 'genital_ulcers',
+      'No ulcers': 'no_ulcers'
+    }
+  },
+
+  pain_location: {
+    question: 'Where is the pain located?',
+    options: ['Lower abdomen', 'Upper abdomen', 'Back/Bilateral', 'No specific pain'],
+    mapping: {
+      'Lower abdomen': 'pelvic_pain',
+      'Upper abdomen': 'upper_abdominal_pain',
+      'Back/Bilateral': 'back_pain',
+      'No specific pain': 'no_pain'
+    }
+  },
+
+  partner_symptoms: {
+    question: 'Are your sexual partners experiencing similar symptoms?',
+    options: ['Yes, partner has symptoms', 'No partner symptoms', 'Don\'t know'],
+    mapping: {
+      'Yes, partner has symptoms': 'partner_symptoms',
+      'No partner symptoms': 'no_partner_symptoms',
+      'Don\'t know': 'unknown_partner_status'
+    }
+  },
+
+  contraception_use: {
+    question: 'Are you using any form of contraception?',
+    options: ['Yes, condoms', 'Yes, other methods', 'No contraception used'],
+    mapping: {
+      'Yes, condoms': 'uses_condoms',
+      'Yes, other methods': 'uses_contraception',
+      'No contraception used': 'no_contraception'
+    }
+  },
+
+  frequency: {
+    question: 'How frequent is your diarrhea?',
+    options: ['More than 10 times/day', '5-10 times/day', '3-4 times/day', 'Less frequent'],
+    mapping: {
+      'More than 10 times/day': 'frequent_diarrhea',
+      '5-10 times/day': 'moderate_diarrhea',
+      '3-4 times/day': 'mild_diarrhea',
+      'Less frequent': 'rare_diarrhea'
+    }
+  },
+
+  blood_presence: {
+    question: 'Is there blood in your diarrhea?',
+    options: ['Yes, bright red blood', 'Yes, dark blood', 'No blood visible'],
+    mapping: {
+      'Yes, bright red blood': 'blood_in_stool',
+      'Yes, dark blood': 'blood_in_stool',
+      'No blood visible': 'no_blood_in_stool'
+    }
+  },
+
+  dehydration_signs: {
+    question: 'Are you showing signs of dehydration?',
+    options: ['Yes, severe dehydration', 'Yes, mild dehydration', 'No dehydration signs'],
+    mapping: {
+      'Yes, severe dehydration': 'severe_dehydration',
+      'Yes, mild dehydration': 'mild_dehydration',
+      'No dehydration signs': 'no_dehydration'
+    }
+  },
+
+  water_source: {
+    question: 'Is your drinking water from a safe source?',
+    options: ['Yes, treated/boiled water', 'Possibly contaminated', 'Unsafe water source'],
+    mapping: {
+      'Yes, treated/boiled water': 'safe_water',
+      'Possibly contaminated': 'contaminated_water',
+      'Unsafe water source': 'unsafe_water'
+    }
+  },
+
+  fever_presence: {
+    question: 'Are you experiencing a fever?',
+    options: ['Yes, high fever (>38°C)', 'Yes, mild fever', 'No fever'],
+    mapping: {
+      'Yes, high fever (>38°C)': 'high_fever',
+      'Yes, mild fever': 'mild_fever',
+      'No fever': 'no_fever'
+    }
+  },
+
+  exposure_history: {
+    question: 'Have you been exposed to sick people?',
+    options: ['Yes, close contact', 'Yes, in crowded areas', 'No known exposure'],
+    mapping: {
+      'Yes, close contact': 'close_contact',
+      'Yes, in crowded areas': 'crowd_exposure',
+      'No known exposure': 'no_exposure'
+    }
+  },
+
+  vaccination_status: {
+    question: 'Are you up to date with vaccinations?',
+    options: ['Yes, vaccinated recently', 'Partially vaccinated', 'Not vaccinated'],
+    mapping: {
+      'Yes, vaccinated recently': 'vaccinated',
+      'Partially vaccinated': 'partial_vaccination',
+      'Not vaccinated': 'not_vaccinated'
+    }
+  },
+
+  headache_frequency: {
+    question: 'How frequent are your headaches?',
+    options: ['Daily headaches', 'Frequent headaches', 'Occasional headaches', 'No headaches'],
+    mapping: {
+      'Daily headaches': 'daily_headaches',
+      'Frequent headaches': 'frequent_headaches',
+      'Occasional headaches': 'occasional_headaches',
+      'No headaches': 'no_headache'
+    }
+  },
+
+  dizziness_presence: {
+    question: 'Are you experiencing dizziness?',
+    options: ['Yes, frequent dizziness', 'Yes, occasional dizziness', 'No dizziness'],
+    mapping: {
+      'Yes, frequent dizziness': 'frequent_dizziness',
+      'Yes, occasional dizziness': 'occasional_dizziness',
+      'No dizziness': 'no_dizziness'
+    }
+  },
+
+  family_history: {
+    question: 'Do you have a family history of hypertension?',
+    options: ['Yes, immediate family', 'Yes, extended family', 'No family history'],
+    mapping: {
+      'Yes, immediate family': 'strong_family_history',
+      'Yes, extended family': 'weak_family_history',
+      'No family history': 'no_family_history'
+    }
+  },
+
+  lifestyle_factors: {
+    question: 'Do you have unhealthy lifestyle factors?',
+    options: ['Yes, high salt, no exercise', 'Yes, some unhealthy habits', 'Healthy lifestyle'],
+    mapping: {
+      'Yes, high salt, no exercise': 'unhealthy_lifestyle',
+      'Yes, some unhealthy habits': 'moderate_unhealthy',
+      'Healthy lifestyle': 'healthy_lifestyle'
+    }
+  },
+
+  medication_history: {
+    question: 'Are you currently taking medication for blood pressure?',
+    options: ['Yes, regularly', 'Yes, sometimes', 'No medication'],
+    mapping: {
+      'Yes, regularly': 'on_bp_medication',
+      'Yes, sometimes': 'partial_medication',
+      'No medication': 'no_medication'
+    }
+  },
+
+  thirst_frequency: {
+    question: 'How frequent is your thirst?',
+    options: ['Constant thirst', 'Very thirsty', 'Occasionally thirsty', 'Normal thirst'],
+    mapping: {
+      'Constant thirst': 'constant_thirst',
+      'Very thirsty': 'excessive_thirst',
+      'Occasionally thirsty': 'frequent_thirst',
+      'Normal thirst': 'normal_thirst'
+    }
+  },
+
+  urination_pattern: {
+    question: 'How often are you urinating?',
+    options: ['More than 10 times/day', '6-10 times/day', '4-5 times/day', 'Normal frequency'],
+    mapping: {
+      'More than 10 times/day': 'frequent_urination',
+      '6-10 times/day': 'increased_urination',
+      '4-5 times/day': 'normal_urination',
+      'Normal frequency': 'normal_urination'
+    }
+  },
+
+  weight_changes: {
+    question: 'Have you noticed weight changes?',
+    options: ['Significant weight loss', 'Moderate weight loss', 'Weight gain', 'No weight change'],
+    mapping: {
+      'Significant weight loss': 'significant_weight_loss',
+      'Moderate weight loss': 'moderate_weight_loss',
+      'Weight gain': 'weight_gain',
+      'No weight change': 'no_weight_change'
+    }
+  },
+
+  mood_changes: {
+    question: 'Have you noticed changes in your mood?',
+    options: ['Severely depressed/lonely', 'Anxious/worried', 'Some mood changes', 'Normal mood'],
+    mapping: {
+      'Severely depressed/lonely': 'severe_mood_changes',
+      'Anxious/worried': 'anxiety_mood',
+      'Some mood changes': 'mild_mood_changes',
+      'Normal mood': 'normal_mood'
+    }
+  },
+
+  sleep_pattern: {
+    question: 'How is your sleep pattern?',
+    options: ['Can\'t sleep at all', 'Trouble falling asleep', 'Irregular sleep', 'Normal sleep'],
+    mapping: {
+      'Can\'t sleep at all': 'insomnia',
+      'Trouble falling asleep': 'difficult_sleep',
+      'Irregular sleep': 'irregular_sleep',
+      'Normal sleep': 'normal_sleep'
+    }
+  },
+
+  suicidal_thoughts: {
+    question: 'Have you had thoughts of harming yourself?',
+    options: ['Yes, serious thoughts', 'Occasional thoughts', 'No such thoughts'],
+    mapping: {
+      'Yes, serious thoughts': 'suicidal_thoughts',
+      'Occasional thoughts': 'mild_suicidal_thoughts',
+      'No such thoughts': 'no_suicidal_thoughts'
+    }
+  },
+
+  substance_use: {
+    question: 'Do you use alcohol or drugs?',
+    options: ['Yes, regularly', 'Yes, occasionally', 'No substance use'],
+    mapping: {
+      'Yes, regularly': 'regular_substance_use',
+      'Yes, occasionally': 'occasional_substance_use',
+      'No substance use': 'no_substance_use'
+    }
+  },
+
+  social_support: {
+    question: 'Do you have good social support?',
+    options: ['Yes, strong support system', 'Limited support', 'No support system'],
+    mapping: {
+      'Yes, strong support system': 'good_social_support',
+      'Limited support': 'limited_support',
+      'No support system': 'no_social_support'
+    }
+  },
+
+  last_menstrual_period: {
+    question: 'When was your last menstrual period?',
+    instruction: 'Please reply with the date or approximately when (e.g., "2 weeks ago", "last month")',
+    mapping: {} // Open-ended response
+  },
+
+  pregnancy_symptoms: {
+    question: 'Are you experiencing pregnancy symptoms?',
+    options: ['Yes, typical symptoms', 'Some symptoms', 'No pregnancy symptoms'],
+    mapping: {
+      'Yes, typical symptoms': 'pregnancy_symptoms',
+      'Some symptoms': 'possible_pregnancy',
+      'No pregnancy symptoms': 'no_pregnancy_symptoms'
+    }
+  },
+
+  bleeding_presence: {
+    question: 'Are you experiencing any bleeding?',
+    options: ['Heavy bleeding', 'Light spotting', 'No bleeding'],
+    mapping: {
+      'Heavy bleeding': 'heavy_bleeding',
+      'Light spotting': 'light_bleeding',
+      'No bleeding': 'no_bleeding'
+    }
+  },
+
+  fetal_movement: {
+    question: 'Can you feel fetal movements?',
+    options: ['Yes, active movements', 'Yes, occasional movements', 'No movements felt'],
+    mapping: {
+      'Yes, active movements': 'fetal_movement',
+      'Yes, occasional movements': 'fetal_movement',
+      'No movements felt': 'no_fetal_movement'
+    }
+  },
+
+  symptom_severity: {
+    question: 'How severe are your symptoms?',
+    options: ['Very severe, can\'t function', 'Moderate, affects daily life', 'Mild, tolerable'],
+    mapping: {
+      'Very severe, can\'t function': 'severe_symptoms',
+      'Moderate, affects daily life': 'moderate_symptoms',
+      'Mild, tolerable': 'mild_symptoms'
+    }
+  },
+
+  onset_time: {
+    question: 'When did your symptoms start?',
+    instruction: 'Please reply with when symptoms began (e.g., "yesterday", "2 days ago", "this morning")',
+    mapping: {} // Open-ended response
+  },
+
+  associated_symptoms: {
+    question: 'What other symptoms are you experiencing?',
+    instruction: 'Please list any additional symptoms you have (e.g., fever, pain, nausea)',
+    mapping: {} // Open-ended response
+  },
+
+  medical_history: {
+    question: 'Do you have any relevant medical history?',
+    instruction: 'Please mention any chronic conditions, allergies, or previous illnesses',
+    mapping: {} // Open-ended response
+  },
+
+  medication_allergies: {
+    question: 'Do you have any known medication allergies?',
+    options: ['Yes, several allergies', 'Yes, minor allergies', 'No known allergies'],
+    mapping: {
+      'Yes, several allergies': 'multiple_allergies',
+      'Yes, minor allergies': 'minor_allergies',
+      'No known allergies': 'no_allergies'
+    }
   }
 };
 
@@ -833,6 +1291,39 @@ const diseasePatterns = {
 };
 
 /**
+ * Get category-specific questions based on selected category ID
+ * @param {string} category - Category ID from dialogflow_webhook.js
+ * @returns {array} - Array of question keys for this category
+ */
+function getCategoryQuestions(category) {
+  const categoryQuestionMap = {
+    '1': ['fever_pattern', 'headache_severity', 'chills_presence', 'travel_history'], // Fever/infections
+    '2': ['cough_type', 'breathing_difficulty', 'fever_presence', 'chest_pain'], // Respiratory
+    '3': ['diarrhea_type', 'abdominal_pain', 'blood_presence', 'dehydration_signs'], // Digestive
+    '4': ['chest_pain', 'breathing_difficulty', 'dizziness_presence', 'headache_frequency'], // Heart - chest_pain is correct first question
+    '5': ['fatigue_level', 'weight_change', 'headache_frequency'], // General - reorder for proper priority
+    '6': ['fever_pattern', 'cough_type', 'breathing_difficulty', 'chest_pain', 'diarrhea_type', 'abdominal_pain'] // Other
+  };
+
+  return categoryQuestionMap[category] || [];
+}
+
+/**
+ * Find disease object by name
+ * @param {string} diseaseName - Name of the disease to find
+ * @returns {object|null} - Disease object or null if not found
+ */
+function findDiseaseByName(diseaseName) {
+  for (const [key, disease] of Object.entries(medicalDictionary)) {
+    if (disease.name.toLowerCase().includes(diseaseName.toLowerCase()) ||
+        diseaseName.toLowerCase().includes(disease.name.toLowerCase())) {
+      return disease;
+    }
+  }
+  return null;
+}
+
+/**
  * Enhanced triage function using the medical dictionary
  * @param {object} userSymptoms - Object containing user symptom responses
  * @returns {object} - Detailed triage recommendation
@@ -874,6 +1365,9 @@ function enhancedTriage(userSymptoms) {
       }
     }
 
+    // Cap confidence at 100%
+    matchScore = Math.min(matchScore, 100);
+
     if (matchScore >= 50) { // Minimum threshold for consideration
       results.possible_conditions.push({
         disease: disease.name,
@@ -888,7 +1382,7 @@ function enhancedTriage(userSymptoms) {
   // Sort by confidence score
   results.possible_conditions.sort((a, b) => b.confidence - a.confidence);
 
-  // Determine urgency based on highest confidence condition
+  // Determine urgency based on highest confidence condition or provide default if no conditions match
   if (results.possible_conditions.length > 0) {
     const topCondition = results.possible_conditions[0];
 
@@ -914,6 +1408,22 @@ function enhancedTriage(userSymptoms) {
       results.recommendations.push('Get HIV test and counseling');
       results.actions.push('Schedule consultation for risk assessment');
     }
+  } else {
+    // No specific conditions matched - provide general recommendations
+    results.urgency_level = 'routine';
+    results.possible_conditions.push({
+      disease: 'General Medical Evaluation',
+      confidence: 30,
+      matched_symptoms: Object.keys(userSymptoms).filter(key => userSymptoms[key] === 'present'),
+      risk_factors: [],
+      description: 'Symptoms require general medical evaluation'
+    });
+
+    results.recommendations.push('Schedule a medical consultation');
+    results.recommendations.push('Monitor your symptoms closely');
+    results.recommendations.push('Seek medical attention if symptoms worsen');
+    results.actions.push('Schedule appointment with healthcare provider');
+    results.actions.push('Keep track of your symptoms and their progression');
   }
 
   return results;
@@ -923,14 +1433,15 @@ function enhancedTriage(userSymptoms) {
  * Get next relevant question based on current symptoms and responses
  * @param {object} currentSymptoms - Current symptom data
  * @param {string} lastQuestion - Last question asked
+ * @param {string} category - Selected symptom category
  * @returns {object} - Next question object
  */
-function getNextQuestion(currentSymptoms, lastQuestion = null) {
-  const answeredQuestions = Object.keys(currentSymptoms).filter(key => currentSymptoms[key] === true);
+function getNextQuestion(currentSymptoms, lastQuestion = null, category = null) {
+  const answeredQuestions = Object.keys(currentSymptoms).filter(key => currentSymptoms[key] === 'answered');
   const totalAnswered = answeredQuestions.length;
 
-  // If we've asked 4+ questions, try to provide assessment
-  if (totalAnswered >= 4) {
+  // If we've asked 7+ questions or have a very confident diagnosis, try to provide assessment
+  if (totalAnswered >= 7) {
     return {
       question: 'Thank you for answering your symptom questions. Based on your responses, here is my assessment:',
       options: [],
@@ -938,32 +1449,56 @@ function getNextQuestion(currentSymptoms, lastQuestion = null) {
     };
   }
 
-  // Determine most likely condition based on current symptoms
+  // If we have a very confident diagnosis (90%+) with minimal questions, also complete
+  const triageResultEarly = enhancedTriage(currentSymptoms);
+  if (totalAnswered >= 2 && triageResultEarly.possible_conditions.length > 0 &&
+      triageResultEarly.possible_conditions[0].confidence >= 90) {
+    return {
+      question: 'Thank you for answering your symptom questions. Based on your responses, here is my assessment:',
+      options: [],
+      completed: true
+    };
+  }
+
+  // PRIORITY 1: Category-specific questions based on user's selected category
+  if (category) {
+    const categoryQuestions = getCategoryQuestions(category);
+
+    // Ask category-specific questions first
+    for (const questionKey of categoryQuestions) {
+      if (!currentSymptoms[questionKey] && questionMappings[questionKey]) {
+        return questionMappings[questionKey];
+      }
+    }
+  }
+
+  // PRIORITY 2: Determine most likely condition based on current symptoms
   const triageResult = enhancedTriage(currentSymptoms);
 
   // If we have a reasonably confident diagnosis, follow that condition's questions
   if (triageResult.possible_conditions.length > 0 && triageResult.possible_conditions[0].confidence >= 40) {
     const topCondition = triageResult.possible_conditions[0];
-    const disease = medicalDictionary[topCondition.disease.toLowerCase().replace(/[^a-z]/g, '')];
+    const disease = findDiseaseByName(topCondition.disease);
 
     if (disease && disease.questions) {
-      // Find next unanswered question for this condition
-      for (const questionKey of disease.questions) {
-        if (!currentSymptoms[questionKey]) {
-          return questionMappings[questionKey];
-        }
+    // Find next unanswered question for this condition
+    for (const questionKey of disease.questions) {
+      if (!currentSymptoms[questionKey] && questionMappings[questionKey]) {
+        return questionMappings[questionKey];
       }
+    }
     }
   }
 
-  // Fallback: Ask medically relevant questions in priority order based on symptoms present
+  // PRIORITY 3: Fallback: Ask medically relevant questions in priority order based on symptoms present
   const priorityQuestions = [
+    'chest_pain',        // Most important first for cardiovascular issues
     'fever_pattern',     // Most common presenting symptom
     'cough_type',        // Common respiratory symptom
     'breathing_difficulty', // Serious symptom
-    'chest_pain',        // Important cardiovascular symptom
     'diarrhea_type',     // Gastrointestinal symptom
     'abdominal_pain',    // Also GI
+    'fatigue_level',     // Common non-specific symptom
     'travel_history',    // Important for infectious diseases
     'headache_severity'  // Common accompanying symptom
   ];
@@ -1030,5 +1565,6 @@ module.exports = {
   diseasePatterns,
   enhancedTriage,
   getNextQuestion,
-  getTreatmentRecommendations
+  getTreatmentRecommendations,
+  getCategoryQuestions
 };

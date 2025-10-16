@@ -229,4 +229,6 @@ const DoctorConsultations = ({ onNavigateToChat }) => {
     );
 };
 
+
+
 export default DoctorConsultations;

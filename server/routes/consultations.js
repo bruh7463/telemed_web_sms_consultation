@@ -132,10 +132,11 @@ router.patch('/:id/complete', protect, async (req, res) => {
         await consultation.save();
 
         // Decrement doctor's workload (ensure it doesn't go below 0)
-        await Doctor.findByIdAndUpdate(consultation.doctor, {
-            $inc: { workload: -1 },
-            $max: { workload: 0 }
-        });
+        const doctor = await Doctor.findById(consultation.doctor);
+        if (doctor) {
+            doctor.workload = Math.max(0, doctor.workload - 1);
+            await doctor.save();
+        }
 
         res.json(consultation);
     } catch (err) {
@@ -255,10 +256,11 @@ router.patch('/:id/cancel', protect, async (req, res) => {
         await consultation.save();
 
         // Decrement doctor's workload (ensure it doesn't go below 0)
-        await Doctor.findByIdAndUpdate(consultation.doctor, {
-            $inc: { workload: -1 },
-            $max: { workload: 0 }
-        });
+        const doctor = await Doctor.findById(consultation.doctor);
+        if (doctor) {
+            doctor.workload = Math.max(0, doctor.workload - 1);
+            await doctor.save();
+        }
 
         res.json({ message: 'Appointment cancelled successfully' });
 

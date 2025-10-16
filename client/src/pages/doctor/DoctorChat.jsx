@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { consultationAPI } from '../../services/api';
+import { consultationAPI, medicalHistoryAPI, setAuthToken } from '../../services/api';
 import { Send, MessageCircle } from 'lucide-react';
 
 const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
@@ -9,6 +9,9 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showMedicalHistory, setShowMedicalHistory] = useState(false);
+    const [medicalHistory, setMedicalHistory] = useState(null);
+    const [loadingMedicalHistory, setLoadingMedicalHistory] = useState(false);
     const messagesEndRef = useRef(null);
 
     // Ensure data is in array format
@@ -93,6 +96,48 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
         });
     };
 
+    const loadMedicalHistory = async () => {
+        if (!selectedConsultation?.patient?._id) return;
+
+        setLoadingMedicalHistory(true);
+        setMedicalHistory(null); // Clear previous data
+        try {
+            console.log('Loading medical history for patient:', selectedConsultation.patient._id);
+            const response = await medicalHistoryAPI.getPatientMedicalHistory(selectedConsultation.patient._id);
+            console.log('Medical history response:', response.data);
+            console.log('Patient DOB from medical history:', response.data?.patient?.dateOfBirth);
+            setMedicalHistory(response.data);
+        } catch (error) {
+            console.error('Error loading medical history:', error);
+            alert('Failed to load medical history');
+        } finally {
+            setLoadingMedicalHistory(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showMedicalHistory && selectedConsultation) {
+            loadMedicalHistory();
+        }
+    }, [showMedicalHistory, selectedConsultation]);
+
+    const calculateAge = (dateOfBirth) => {
+        if (!dateOfBirth) return 'Not available';
+        try {
+            const today = new Date();
+            const birthDate = new Date(dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age >= 0 ? age.toString() : 'Not available';
+        } catch (error) {
+            console.warn('Error calculating age:', error);
+            return 'Not available';
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -118,7 +163,7 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
                                 >
                                     <div className="flex items-center space-x-3">
                                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                        <div>
+                                        <div className="flex-1">
                                             <h3 className="text-sm font-medium text-gray-900">
                                                 {consultation.patient?.name || 'Unknown Patient'}
                                             </h3>
@@ -126,6 +171,19 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
                                                 Started {consultation.scheduledStart ? new Date(consultation.scheduledStart).toLocaleDateString() : 'Date not set'}
                                             </p>
                                         </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setSelectedConsultation(consultation);
+                                                setShowMedicalHistory(true);
+                                            }}
+                                            className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+                                            type="button"
+                                            title="View Medical History"
+                                        >
+                                            Med
+                                        </button>
                                     </div>
                                 </div>
                             ))
@@ -219,8 +277,304 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
                     )}
                 </div>
             </div>
+
+            {/* Medical History Modal */}
+            {showMedicalHistory && selectedConsultation && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border">
+                        <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900">Medical History</h2>
+                                   <div className="flex items-center space-x-4 mt-2">
+                                        <p className="text-lg font-medium text-gray-800">{selectedConsultation.patient?.name}</p>
+                                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                            Age: {medicalHistory?.patient?.dateOfBirth ? calculateAge(medicalHistory.patient.dateOfBirth) : 'Not set'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center mt-2 space-x-4">
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                            selectedConsultation.communicationMethod === 'SMS'
+                                                ? 'bg-green-100 text-green-800'
+                                                : 'bg-purple-100 text-purple-800'
+                                        }`}>
+                                            {selectedConsultation.communicationMethod === 'SMS' ? '📱 SMS Patient' : '🌐 Web Patient'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowMedicalHistory(false)}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6">
+                            {loadingMedicalHistory ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                                    <p className="ml-4 text-gray-600">Loading medical history...</p>
+                                </div>
+                            ) : (
+                                medicalHistory && typeof medicalHistory === 'object' && Object.keys(medicalHistory).length > 0 ? (
+                                    <MedicalHistoryOverview medicalHistory={medicalHistory} />
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <p className="text-gray-500">No medical history found for this patient.</p>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+
+// Medical History Overview Component
+const MedicalHistoryOverview = ({ medicalHistory }) => (
+    <div className="space-y-8">
+        {/* Personal Information */}
+        {medicalHistory.patient && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    👤 Personal Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                        <p className="text-base">{medicalHistory.patient.name || 'Not provided'}</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                        <p className="text-base">
+                            {medicalHistory.patient.dateOfBirth
+                                ? new Date(medicalHistory.patient.dateOfBirth).toLocaleDateString()
+                                : 'Not provided'
+                            }
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Gender</label>
+                        <p className="text-base capitalize">{medicalHistory.patient.gender || 'Not provided'}</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                        <p className="text-base">{medicalHistory.patient.phoneNumber || 'Not provided'}</p>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Allergies */}
+        {medicalHistory.allergies && medicalHistory.allergies.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    🚫 Allergies
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.allergies.map((allergy, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-gray-900">{allergy.allergen}</h4>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    allergy.severity === 'severe' ? 'bg-red-100 text-red-800' :
+                                    allergy.severity === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-green-100 text-green-800'
+                                }`}>
+                                    {allergy.severity}
+                                </span>
+                            </div>
+                            {allergy.reaction && (
+                                <p className="text-sm text-gray-600 mt-1">Reaction: {allergy.reaction}</p>
+                            )}
+                            {allergy.notes && (
+                                <p className="text-sm text-gray-600 mt-1">{allergy.notes}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Chronic Conditions */}
+        {medicalHistory.chronicConditions && medicalHistory.chronicConditions.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    🏥 Chronic Conditions
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.chronicConditions.map((condition, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-gray-900">{condition.condition}</h4>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    condition.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                                }`}>
+                                    {condition.status}
+                                </span>
+                            </div>
+                            {condition.diagnosedDate && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                    Diagnosed: {new Date(condition.diagnosedDate).toLocaleDateString()}
+                                </p>
+                            )}
+                            {condition.notes && (
+                                <p className="text-sm text-gray-600 mt-1">{condition.notes}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Current Medications */}
+        {medicalHistory.currentMedications && medicalHistory.currentMedications.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    💊 Current Medications
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.currentMedications.map((medication, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <h4 className="font-medium text-gray-900">{medication.medication || medication.name || 'Unnamed Medication'}</h4>
+                            {medication.dosage && (
+                                <p className="text-sm text-gray-600 mt-1">Dosage: {medication.dosage}</p>
+                            )}
+                            {medication.frequency && (
+                                <p className="text-sm text-gray-600 mt-1">Frequency: {medication.frequency}</p>
+                            )}
+                            {medication.reason && (
+                                <p className="text-sm text-gray-600 mt-1">Reason: {medication.reason}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Past Surgeries */}
+        {medicalHistory.pastSurgeries && medicalHistory.pastSurgeries.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    🏥 Past Surgeries
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.pastSurgeries.map((surgery, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <h4 className="font-medium text-gray-900">{surgery.procedure}</h4>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Date: {new Date(surgery.date).toLocaleDateString()}
+                            </p>
+                            {surgery.outcome && (
+                                <p className="text-sm text-gray-600 mt-1">Outcome: {surgery.outcome}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Social History */}
+        {medicalHistory.socialHistory && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    🌟 Social History
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Smoking */}
+                    {medicalHistory.socialHistory.smoking && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Smoking Status</label>
+                            <p className="text-base capitalize">{medicalHistory.socialHistory.smoking.status || 'Not reported'}</p>
+                            {medicalHistory.socialHistory.smoking.packsPerDay && (
+                                <p className="text-sm text-gray-600 mt-1">{medicalHistory.socialHistory.smoking.packsPerDay} packs per day</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Alcohol */}
+                    {medicalHistory.socialHistory.alcohol && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Alcohol Status</label>
+                            <p className="text-base capitalize">{medicalHistory.socialHistory.alcohol.status || 'Not reported'}</p>
+                            {medicalHistory.socialHistory.alcohol.drinksPerWeek && (
+                                <p className="text-sm text-gray-600 mt-1">{medicalHistory.socialHistory.alcohol.drinksPerWeek} drinks per week</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Occupation */}
+                    {medicalHistory.socialHistory.occupation && (
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700">Occupation</label>
+                            <p className="text-base">{medicalHistory.socialHistory.occupation}</p>
+                        </div>
+                    )}
+
+                    {/* Exercise */}
+                    {medicalHistory.socialHistory.exercise && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Exercise</label>
+                            <p className="text-base">{medicalHistory.socialHistory.exercise}</p>
+                        </div>
+                    )}
+
+                    {/* Diet */}
+                    {medicalHistory.socialHistory.diet && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Diet</label>
+                            <p className="text-base">{medicalHistory.socialHistory.diet}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* Family History */}
+        {medicalHistory.familyHistory && medicalHistory.familyHistory.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    👨‍👩‍👧‍👦 Family History
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.familyHistory.map((member, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <h4 className="font-medium text-gray-900">
+                                {member.relationship}: {member.name}
+                            </h4>
+                            {member.medicalHistory && (
+                                <p className="text-sm text-gray-600 mt-1">{member.medicalHistory}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Emergency Contacts */}
+        {medicalHistory.emergencyContacts && medicalHistory.emergencyContacts.length > 0 && (
+            <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                    🚑 Emergency Contacts
+                </h3>
+                <div className="space-y-3">
+                    {medicalHistory.emergencyContacts.map((contact, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-gray-900">{contact.name}</h4>
+                                <span className="text-sm text-gray-600">{contact.relationship}</span>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">Phone: {contact.phoneNumber}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+);
 
 export default DoctorChat;

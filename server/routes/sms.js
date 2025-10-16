@@ -179,7 +179,7 @@ router.post('/incoming', async (req, res) => {
             return res.status(200).send('SMS processed: Appointments listed.');
         }
 
-        // Handle prescription queries
+        // Handle prescription queries with selection capability
         if (lowerContent.includes('my prescriptions') || lowerContent.includes('prescriptions') || lowerContent.includes('medication')) {
             if (patient.nrc.startsWith('TEMP-')) {
                 await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
@@ -188,44 +188,679 @@ router.post('/incoming', async (req, res) => {
 
             try {
                 const prescriptions = await Prescription.find({ patient: patient._id })
-                    .populate('doctor', 'name')
+                    .populate('doctor', 'name specialty')
                     .sort({ createdAt: -1 })
-                    .limit(5); // Limit to last 5 prescriptions
+                    .limit(10); // Show up to 10 prescriptions
 
                 if (prescriptions.length === 0) {
                     await sendSms(from, TEXTBEE_SENDER_ID, 'You have no prescriptions on record. Please consult with a doctor to get prescriptions.');
                     return res.status(200).send('SMS processed: No prescriptions found.');
                 }
 
-                let message = `Your recent prescriptions:\n\n`;
-                prescriptions.forEach((prescription, index) => {
-                    message += `${index + 1}. From Dr. ${prescription.doctor.name}\n`;
-                    message += `Diagnosis: ${prescription.diagnosis}\n`;
-                    message += `Medications:\n`;
+                // If there's only one prescription, show it in detail immediately
+                if (prescriptions.length === 1) {
+                    const prescription = prescriptions[0];
+                    let message = `Your Prescription\nfrom Dr. ${prescription.doctor.name}\n\n`;
 
+                    if (prescription.diagnosis) {
+                        message += `Diagnosis: ${prescription.diagnosis}\n\n`;
+                    }
+
+                    message += `MEDICATIONS:\n`;
                     prescription.medications.forEach((med, medIndex) => {
-                        message += `  ${medIndex + 1}. ${med.name} - ${med.dosage}, ${med.frequency}\n`;
+                        message += `${medIndex + 1}. ${med.name}\n`;
+                        message += `   Dosage: ${med.dosage}\n`;
+                        message += `   Frequency: ${med.frequency}\n`;
+                        message += `   Duration: ${med.duration}\n`;
                         if (med.instructions) {
-                            message += `     Instructions: ${med.instructions}\n`;
+                            message += `   Instructions: ${med.instructions}\n`;
                         }
+                        message += `\n`;
                     });
-                    message += `Notes: ${prescription.notes || 'None'}\n`;
 
-                    message += `Date: ${new Date(prescription.createdAt).toLocaleDateString()}\n\n`;
+                    if (prescription.notes) {
+                        message += `Notes: ${prescription.notes}\n\n`;
+                    }
+
+                    if (prescription.allergies) {
+                        message += `Allergies: ${prescription.allergies}\n\n`;
+                    }
+
+                    message += `Date: ${new Date(prescription.createdAt).toLocaleDateString()}`;
+
+                    // Truncate if too long for SMS
+                    if (message.length > 1400) {
+                        message = message.substring(0, 1350) + '...\n\nFor full details, please check your patient dashboard.';
+                    }
+
+                    await sendSms(from, TEXTBEE_SENDER_ID, message);
+                    return res.status(200).send('SMS processed: Single prescription sent.');
+                }
+
+                // Multiple prescriptions - show numbered list for selection
+                let message = `Your Prescriptions (${prescriptions.length} total):\n\n`;
+                prescriptions.forEach((prescription, index) => {
+                    message += `${index + 1}. Date: ${new Date(prescription.createdAt).toLocaleDateString()}\n`;
+                    message += `   Dr. ${prescription.doctor.name || 'Unknown'}\n`;
+                    message += `   ${prescription.medications.length} medication${prescription.medications.length > 1 ? 's' : ''}\n`;
+                    if (prescription.diagnosis) {
+                        message += `   Diagnosis: ${prescription.diagnosis.substring(0, 30)}${prescription.diagnosis.length > 30 ? '...' : ''}\n`;
+                    }
+                    message += `\n`;
                 });
 
-                // Truncate message if too long for SMS
-                if (message.length > 1000) {
-                    message = message.substring(0, 950) + '...\n\nFor full details, please check your patient dashboard.';
+                message += `Reply with "view 1", "view 2", etc. to see prescription details.\nOr "prescription 1", "prescription 2", etc.`;
+
+                // Truncate if too long for SMS
+                if (message.length > 1400) {
+                    message = message.substring(0, 1350) + '...\n\nFor full list, please check your patient dashboard.';
                 }
 
                 await sendSms(from, TEXTBEE_SENDER_ID, message);
-                return res.status(200).send('SMS processed: Prescriptions sent.');
+                return res.status(200).send('SMS processed: Prescription list sent.');
 
             } catch (error) {
                 console.error('Error fetching prescriptions:', error);
                 await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error retrieving your prescriptions. Please try again later.');
                 return res.status(200).send('SMS processed: Error fetching prescriptions.');
+            }
+        }
+
+        // Handle prescription selection requests (e.g., "view 1", "prescription 2")
+        const prescriptionSelectMatch = lowerContent.match(/\b(?:view|prescription|select)\s+(\d+)\b/);
+
+        // Handle medical history update requests
+        if (lowerContent.includes('update medical') || lowerContent.includes('update history') ||
+            lowerContent.includes('medical update') || lowerContent.includes('update meds') ||
+            lowerContent.includes('update medication') || lowerContent.includes('update allergies') ||
+            lowerContent.includes('update vitals') || lowerContent.includes('update vital signs')) {
+
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            // Present options for medical history fields that can be updated via SMS
+            const message = `Update Medical History\n\nSelect field to update:\n1. Current Medications\n2. Allergies\n3. Vital Signs (Weight, BP, etc.)\n4. Social History (Smoking/Alcohol)\n\nReply with the number (e.g., "1" for medications)`;
+            await sendSms(from, TEXTBEE_SENDER_ID, message);
+            return res.status(200).send('SMS processed: Medical history options sent.');
+        }
+
+        // Handle medical history field selection (e.g., "1", "2", etc.)
+        const medicalFieldMatch = lowerContent.match(/^(?:update\s+)?(?:field\s+)?(\d+)$/);
+        if (medicalFieldMatch) {
+            const fieldNumber = parseInt(medicalFieldMatch[1]);
+
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const fieldMap = {
+                1: 'currentMedications',
+                2: 'allergies',
+                3: 'vitalSigns',
+                4: 'socialHistory'
+            };
+
+            const selectedField = fieldMap[fieldNumber];
+            if (!selectedField) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid option. Please select 1-4 for medical history fields.');
+                return res.status(200).send('SMS processed: Invalid selection.');
+            }
+
+            if (selectedField === 'currentMedications') {
+                // List current medications first
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                let message = 'Current Medications:\n';
+                if (medicalHistory && medicalHistory.currentMedications && medicalHistory.currentMedications.length > 0) {
+                    medicalHistory.currentMedications.forEach((med, index) => {
+                        message += `${index + 1}. ${med.medication} - ${med.dosage} ${med.frequency}\n`;
+                    });
+                } else {
+                    message += 'No current medications recorded.\n';
+                }
+                message += '\nTo ADD a medication, reply with: "add med [name] [dosage] [frequency]"\n';
+                message += 'Example: "add med aspirin 100mg daily"\n\n';
+                message += 'To REMOVE a medication, reply with: "remove med [number]"\n';
+                message += 'Example: "remove med 1"';
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Current medications listed.');
+            }
+
+            if (selectedField === 'allergies') {
+                // List current allergies first
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                let message = 'Current Allergies:\n';
+                if (medicalHistory && medicalHistory.allergies && medicalHistory.allergies.length > 0) {
+                    medicalHistory.allergies.forEach((allergy, index) => {
+                        message += `${index + 1}. ${allergy.allergen} - ${allergy.reaction} (${allergy.severity})\n`;
+                    });
+                } else {
+                    message += 'No allergies recorded.\n';
+                }
+                message += '\nTo ADD an allergy, reply with: "add allergy [allergen] [reaction] [severity]"\n';
+                message += 'Example: "add allergy penicillin rash moderate"\n\n';
+                message += 'To REMOVE an allergy, reply with: "remove allergy [number]"\n';
+                message += 'Example: "remove allergy 1"';
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Current allergies listed.');
+            }
+
+            if (selectedField === 'vitalSigns') {
+                // Show current vitals and options for update
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                let message = 'Current Vital Signs:\n';
+                if (medicalHistory && medicalHistory.vitalSigns) {
+                    const vitals = medicalHistory.vitalSigns;
+                    if (vitals.weight) message += `Weight: ${vitals.weight} kg\n`;
+                    if (vitals.bloodPressure && vitals.bloodPressure.systolic) {
+                        message += `BP: ${vitals.bloodPressure.systolic}/${vitals.bloodPressure.diastolic}\n`;
+                    }
+                    if (vitals.heartRate) message += `Heart Rate: ${vitals.heartRate} bpm\n`;
+                    if (vitals.temperature) message += `Temperature: ${vitals.temperature}°C\n`;
+                    if (vitals.height) message += `Height: ${vitals.height} cm\n`;
+                    if (vitals.bmi) message += `BMI: ${vitals.bmi}\n`;
+                } else {
+                    message += 'No vital signs recorded.\n';
+                }
+                message += '\nReply with vitals to update:\n';
+                message += 'Example: "weight 70" or "bp 120/80" or "temp 36.5"';
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Current vitals shown.');
+            }
+
+            if (selectedField === 'socialHistory') {
+                // Show social history options
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                let message = 'Social History:\n';
+                if (medicalHistory && medicalHistory.socialHistory) {
+                    const social = medicalHistory.socialHistory;
+                    message += `Smoking: ${social.smoking.status}\n`;
+                    message += `Alcohol: ${social.alcohol.status}\n`;
+                } else {
+                    message += 'No social history recorded.\n';
+                }
+                message += '\nUpdate smoking: "smoking never/former/current"\n';
+                message += 'Update alcohol: "alcohol never/occasional/moderate/heavy"\n';
+                message += 'Example: "smoking former" or "alcohol moderate"';
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Social history options shown.');
+            }
+        }
+
+        // Handle medication updates: adding and removing
+        const addMedMatch = lowerContent.match(/add med(?:ication)?\s+(.+)/i);
+        if (addMedMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const medDetails = addMedMatch[1].trim();
+            // Simple parsing: assume format "name dosage frequency"
+            const parts = medDetails.split(/\s+/);
+            if (parts.length < 3) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please provide medication in format: "add med [name] [dosage] [frequency]"\nExample: "add med aspirin 100mg daily"');
+                return res.status(200).send('SMS processed: Invalid medication format.');
+            }
+
+            const medication = parts[0];
+            const dosage = parts[1];
+            const frequency = parts.slice(2).join(' ');
+
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                }
+
+                medicalHistory.currentMedications.push({
+                    medication,
+                    dosage,
+                    frequency,
+                    status: 'active',
+                    lastUpdated: new Date(),
+                    updatedBy: patient._id,
+                    updatedByType: 'patient'
+                });
+
+                await medicalHistory.save();
+
+                await sendSms(from, TEXTBEE_SENDER_ID, `Added medication: ${medication} ${dosage} ${frequency}\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Medication added.');
+            } catch (error) {
+                console.error('Error adding medication:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your medication. Please try again.');
+                return res.status(200).send('SMS processed: Error adding medication.');
+            }
+        }
+
+        const removeMedMatch = lowerContent.match(/remove med(?:ication)?\s+(\d+)/i);
+        if (removeMedMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const medIndex = parseInt(removeMedMatch[1]) - 1; // Convert to 0-based
+
+            try {
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory || !medicalHistory.currentMedications || medIndex < 0 || medIndex >= medicalHistory.currentMedications.length) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid medication number. Please check your current medications first.');
+                    return res.status(200).send('SMS processed: Invalid medication selection.');
+                }
+
+                const removedMed = medicalHistory.currentMedications.splice(medIndex, 1)[0];
+                medicalHistory.currentMedications = medicalHistory.currentMedications.map(med => ({
+                    ...med,
+                    lastUpdated: new Date(),
+                    updatedBy: patient._id,
+                    updatedByType: 'patient'
+                }));
+
+                await medicalHistory.save();
+
+                await sendSms(from, TEXTBEE_SENDER_ID, `Removed medication: ${removedMed.medication}\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Medication removed.');
+            } catch (error) {
+                console.error('Error removing medication:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your medication. Please try again.');
+                return res.status(200).send('SMS processed: Error removing medication.');
+            }
+        }
+
+        // Handle allergy updates: adding and removing
+        const addAllergyMatch = lowerContent.match(/add allergy\s+(.+)/i);
+        if (addAllergyMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const allergyDetails = addAllergyMatch[1].trim();
+            // Simple parsing: assume format "allergen reaction severity"
+            const parts = allergyDetails.split(/\s+/);
+            if (parts.length < 2) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please provide allergy in format: "add allergy [allergen] [reaction] [severity]"\nExample: "add allergy penicillin rash moderate"');
+                return res.status(200).send('SMS processed: Invalid allergy format.');
+            }
+
+            const allergen = parts[0];
+            const reaction = parts[1];
+            const severity = parts[2] || 'mild';
+
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                }
+
+                medicalHistory.allergies.push({
+                    allergen,
+                    reaction,
+                    severity: severity.toLowerCase(),
+                    status: 'active',
+                    lastUpdated: new Date(),
+                    updatedBy: patient._id,
+                    updatedByType: 'patient'
+                });
+
+                await medicalHistory.save();
+
+                await sendSms(from, TEXTBEE_SENDER_ID, `Added allergy: ${allergen} - ${reaction} (${severity})\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Allergy added.');
+            } catch (error) {
+                console.error('Error adding allergy:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your allergy. Please try again.');
+                return res.status(200).send('SMS processed: Error adding allergy.');
+            }
+        }
+
+        const removeAllergyMatch = lowerContent.match(/remove allergy\s+(\d+)/i);
+        if (removeAllergyMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const allergyIndex = parseInt(removeAllergyMatch[1]) - 1; // Convert to 0-based
+
+            try {
+                const { MedicalHistory } = require('../models/db');
+                const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory || !medicalHistory.allergies || allergyIndex < 0 || allergyIndex >= medicalHistory.allergies.length) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid allergy number. Please check your current allergies first.');
+                    return res.status(200).send('SMS processed: Invalid allergy selection.');
+                }
+
+                const removedAllergy = medicalHistory.allergies.splice(allergyIndex, 1)[0];
+                medicalHistory.allergies = medicalHistory.allergies.map(allergy => ({
+                    ...allergy,
+                    lastUpdated: new Date(),
+                    updatedBy: patient._id,
+                    updatedByType: 'patient'
+                }));
+
+                await medicalHistory.save();
+
+                await sendSms(from, TEXTBEE_SENDER_ID, `Removed allergy: ${removedAllergy.allergen}\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Allergy removed.');
+            } catch (error) {
+                console.error('Error removing allergy:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your allergy. Please try again.');
+                return res.status(200).send('SMS processed: Error removing allergy.');
+            }
+        }
+
+        // Handle vital signs updates
+        const weightMatch = lowerContent.match(/weight\s+(\d+(?:\.\d+)?)/i);
+        if (weightMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const weight = parseFloat(weightMatch[1]);
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                }
+
+                if (!medicalHistory.vitalSigns) {
+                    medicalHistory.vitalSigns = {};
+                }
+
+                medicalHistory.vitalSigns.weight = weight;
+                medicalHistory.vitalSigns.lastUpdated = new Date();
+                medicalHistory.vitalSigns.updatedBy = patient._id;
+                medicalHistory.vitalSigns.updatedByType = 'patient';
+
+                // Recalculate BMI if height exists
+                if (medicalHistory.vitalSigns.height) {
+                    medicalHistory.vitalSigns.bmi = (weight / Math.pow(medicalHistory.vitalSigns.height / 100, 2)).toFixed(1);
+                }
+
+                await medicalHistory.save();
+                await sendSms(from, TEXTBEE_SENDER_ID, `Updated weight to ${weight} kg\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Weight updated.');
+            } catch (error) {
+                console.error('Error updating weight:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your weight. Please try again.');
+                return res.status(200).send('SMS processed: Error updating weight.');
+            }
+        }
+
+        const bpMatch = lowerContent.match(/bp\s+(\d+)\/(\d+)/i);
+        if (bpMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const systolic = parseInt(bpMatch[1]);
+            const diastolic = parseInt(bpMatch[2]);
+
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                }
+
+                if (!medicalHistory.vitalSigns) {
+                    medicalHistory.vitalSigns = {};
+                }
+
+                medicalHistory.vitalSigns.bloodPressure = {
+                    systolic,
+                    diastolic,
+                    measuredDate: new Date()
+                };
+                medicalHistory.vitalSigns.lastUpdated = new Date();
+                medicalHistory.vitalSigns.updatedBy = patient._id;
+                medicalHistory.vitalSigns.updatedByType = 'patient';
+
+                await medicalHistory.save();
+                await sendSms(from, TEXTBEE_SENDER_ID, `Updated blood pressure to ${systolic}/${diastolic}\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Blood pressure updated.');
+            } catch (error) {
+                console.error('Error updating blood pressure:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your blood pressure. Please try again.');
+                return res.status(200).send('SMS processed: Error updating blood pressure.');
+            }
+        }
+
+        const tempMatch = lowerContent.match(/temp(?:erature)?\s+(\d+(?:\.\d+)?)/i);
+        if (tempMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const temperature = parseFloat(tempMatch[1]);
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                }
+
+                if (!medicalHistory.vitalSigns) {
+                    medicalHistory.vitalSigns = {};
+                }
+
+                medicalHistory.vitalSigns.temperature = temperature;
+                medicalHistory.vitalSigns.lastUpdated = new Date();
+                medicalHistory.vitalSigns.updatedBy = patient._id;
+                medicalHistory.vitalSigns.updatedByType = 'patient';
+
+                await medicalHistory.save();
+                await sendSms(from, TEXTBEE_SENDER_ID, `Updated temperature to ${temperature}°C\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Temperature updated.');
+            } catch (error) {
+                console.error('Error updating temperature:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your temperature. Please try again.');
+                return res.status(200).send('SMS processed: Error updating temperature.');
+            }
+        }
+
+        // Handle social history updates
+        const smokingMatch = lowerContent.match(/smoking\s+(never|former|current)/i);
+        if (smokingMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const status = smokingMatch[1].toLowerCase();
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                const isNew = !medicalHistory;
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({
+                        patient: patient._id,
+                        createdBy: patient._id,
+                        createdByType: 'patient',
+                        updatedBy: patient._id,
+                        updatedByType: 'patient'
+                    });
+                }
+
+                if (!medicalHistory.socialHistory) {
+                    medicalHistory.socialHistory = {};
+                }
+
+                if (!medicalHistory.socialHistory.smoking) {
+                    medicalHistory.socialHistory.smoking = {};
+                }
+
+                medicalHistory.socialHistory.smoking.status = status;
+                medicalHistory.socialHistory.smoking.lastUpdated = new Date();
+                medicalHistory.socialHistory.smoking.updatedBy = patient._id;
+                medicalHistory.socialHistory.smoking.updatedByType = 'patient';
+                medicalHistory.socialHistory.lastUpdated = new Date();
+                medicalHistory.socialHistory.updatedBy = patient._id;
+                medicalHistory.socialHistory.updatedByType = 'patient';
+
+                // Always update main document metadata
+                medicalHistory.updatedBy = patient._id;
+                medicalHistory.updatedByType = 'patient';
+
+                await medicalHistory.save();
+                await sendSms(from, TEXTBEE_SENDER_ID, `Updated smoking status to "${status}"\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Smoking status updated.');
+            } catch (error) {
+                console.error('Error updating smoking status:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your smoking status. Please try again.');
+                return res.status(200).send('SMS processed: Error updating smoking status.');
+            }
+        }
+
+        const alcoholMatch = lowerContent.match(/alcohol\s+(never|occasional|moderate|heavy)/i);
+        if (alcoholMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const status = alcoholMatch[1].toLowerCase();
+            try {
+                const { MedicalHistory } = require('../models/db');
+                let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
+
+                const isNew = !medicalHistory;
+                if (!medicalHistory) {
+                    medicalHistory = new MedicalHistory({
+                        patient: patient._id,
+                        createdBy: patient._id,
+                        createdByType: 'patient',
+                        updatedBy: patient._id,
+                        updatedByType: 'patient'
+                    });
+                }
+
+                if (!medicalHistory.socialHistory) {
+                    medicalHistory.socialHistory = {};
+                }
+
+                if (!medicalHistory.socialHistory.alcohol) {
+                    medicalHistory.socialHistory.alcohol = {};
+                }
+
+                medicalHistory.socialHistory.alcohol.status = status;
+                medicalHistory.socialHistory.alcohol.lastUpdated = new Date();
+                medicalHistory.socialHistory.alcohol.updatedBy = patient._id;
+                medicalHistory.socialHistory.alcohol.updatedByType = 'patient';
+                medicalHistory.socialHistory.lastUpdated = new Date();
+                medicalHistory.socialHistory.updatedBy = patient._id;
+                medicalHistory.socialHistory.updatedByType = 'patient';
+
+                // Always update main document metadata
+                medicalHistory.updatedBy = patient._id;
+                medicalHistory.updatedByType = 'patient';
+
+                await medicalHistory.save();
+                await sendSms(from, TEXTBEE_SENDER_ID, `Updated alcohol status to "${status}"\n\nReply "update medical" to continue updating.`);
+                return res.status(200).send('SMS processed: Alcohol status updated.');
+            } catch (error) {
+                console.error('Error updating alcohol status:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error updating your alcohol status. Please try again.');
+                return res.status(200).send('SMS processed: Error updating alcohol status.');
+            }
+        }
+        if (prescriptionSelectMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const prescriptionIndex = parseInt(prescriptionSelectMatch[1]) - 1; // Convert to 0-based index
+
+            try {
+                const prescriptions = await Prescription.find({ patient: patient._id })
+                    .populate('doctor', 'name specialty')
+                    .sort({ createdAt: -1 })
+                    .limit(10);
+
+                if (prescriptionIndex < 0 || prescriptionIndex >= prescriptions.length) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, `Invalid prescription number. You have ${prescriptions.length} prescriptions. Reply with "view 1" to view the most recent prescription.`);
+                    return res.status(200).send('SMS processed: Invalid prescription selection.');
+                }
+
+                const prescription = prescriptions[prescriptionIndex];
+                let message = `PRESCRIPTION DETAILS\nfrom Dr. ${prescription.doctor.name}\n\n`;
+
+                if (prescription.diagnosis) {
+                    message += `Diagnosis: ${prescription.diagnosis}\n\n`;
+                }
+
+                message += `MEDICATIONS:\n`;
+                prescription.medications.forEach((med, medIndex) => {
+                    message += `${medIndex + 1}. ${med.name}\n`;
+                    message += `   Dosage: ${med.dosage}\n`;
+                    message += `   Frequency: ${med.frequency}\n`;
+                    message += `   Duration: ${med.duration}\n`;
+                    if (med.instructions) {
+                        message += `   Instructions: ${med.instructions}\n`;
+                    }
+                    message += `\n`;
+                });
+
+                if (prescription.notes) {
+                    message += `Notes: ${prescription.notes}\n\n`;
+                }
+
+                if (prescription.allergies) {
+                    message += `Allergies: ${prescription.allergies}\n\n`;
+                }
+
+                message += `Status: ${prescription.status}\n`;
+                message += `Date: ${new Date(prescription.createdAt).toLocaleDateString()}`;
+
+                if (prescription.status !== 'ACTIVE') {
+                    message += `\n\nTo get a new prescription, type "book consultation".`;
+                }
+
+                // Truncate if too long for SMS
+                if (message.length > 1400) {
+                    message = message.substring(0, 1350) + '...\n\nFor full details, please check your patient dashboard.';
+                }
+
+                await sendSms(from, TEXTBEE_SENDER_ID, message);
+                return res.status(200).send('SMS processed: Prescription details sent.');
+
+            } catch (error) {
+                console.error('Error fetching prescription details:', error);
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Sorry, there was an error retrieving prescription details. Please try again later.');
+                return res.status(200).send('SMS processed: Error fetching prescription details.');
             }
         }
 

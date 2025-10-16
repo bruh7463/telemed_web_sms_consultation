@@ -133,26 +133,25 @@ router.post('/', async (req, res) => {
                     const category = categoryNameToId[inputCategory.toLowerCase()] || inputCategory;
                     responseText = `You selected: ${categoryNames[category] || 'Unknown category'}.\n\nTo help me assess your situation, I need to ask you a few specific questions about your symptoms. Please answer as accurately as possible.`;
 
-                    // Use medical dictionary to determine the first medically-relevant question
-                    // For now, start with a basic assessment to determine next questions
+                    // Use medical dictionary with category-specific questions
                     const initialSymptoms = {}; // No symptoms collected yet
-                    const nextQuestion = getNextQuestion(initialSymptoms);
+                    const nextQuestion = getNextQuestion(initialSymptoms, null, category);
 
                     if (!nextQuestion.completed) {
                         // Format question with options
                         let formattedQuestion = nextQuestion.question;
 
-                        // Add numbered options if available
-                        if (nextQuestion.options && nextQuestion.options.length > 0) {
-                            formattedQuestion += '\n\nPlease reply with the number of your choice:\n';
-                            nextQuestion.options.forEach((option, index) => {
-                                formattedQuestion += `(${index + 1}) ${option}\n`;
-                            });
-                        }
+                    // Add numbered options if available
+                    if (nextQuestion.options && nextQuestion.options.length > 0) {
+                        formattedQuestion += '\n\nPlease reply with the number of your choice:\n';
+                        nextQuestion.options.forEach((option, index) => {
+                            formattedQuestion += `(${index + 1}) ${option}\n`;
+                        });
+                    }
 
                         responseText += `\n\n${formattedQuestion}`;
 
-                        // Create conversation state to track first question
+                        // Create conversation state with category tracking
                         const conversationKey = `${sessionId}_symptoms`;
                         const conversationState = {
                             symptoms: {},
@@ -231,7 +230,7 @@ router.post('/', async (req, res) => {
                                 conversationState.symptoms[parameterName] = 'present';
                                 // Also mark the question as answered for progression tracking
                                 if (questionKey) {
-                                    conversationState.symptoms[questionKey] = true;
+                                    conversationState.symptoms[questionKey] = 'answered';
                                 }
                                 console.log(`Mapped response "${numericChoice}" to parameter "${parameterName}" for question "${questionKey}"`);
                             }
@@ -239,10 +238,15 @@ router.post('/', async (req, res) => {
                     }
                 }
 
-                // Get next medical question based on updated symptoms
-                const nextQuestion = getNextQuestion(conversationState.symptoms);
+                // Debug logging for symptom tracking
+                console.log(`DEBUG: Current conversation symptoms:`, conversationState.symptoms);
+                console.log(`DEBUG: Symptom count: ${Object.keys(conversationState.symptoms).length}`);
+                console.log(`DEBUG: Answerable count: ${Object.keys(conversationState.symptoms).filter(key => conversationState.symptoms[key] === 'answered').length}`);
 
-                if (nextQuestion.completed || nextQuestion.question.includes('assessment')) {
+                // Get next medical question based on updated symptoms and category
+                const nextQuestion = getNextQuestion(conversationState.symptoms, null, conversationState.category);
+
+                if (nextQuestion?.completed || nextQuestion?.question?.includes('assessment')) {
                     // Assessment complete - provide triage
                     console.log('Symptom assessment completed:', conversationState.symptoms);
 
@@ -250,24 +254,43 @@ router.post('/', async (req, res) => {
                     let assessmentText = `Based on your symptoms, you may be experiencing:\n\n`;
 
                     // Format triage results
-                    triageResult.possible_conditions.forEach((condition, index) => {
-                        assessmentText += `${index + 1}. ${condition.disease} (${condition.confidence}% likelihood)\n`;
-                    });
+                    if (Array.isArray(triageResult.possible_conditions)) {
+                        triageResult.possible_conditions.forEach((condition, index) => {
+                            if (condition && condition.disease) {
+                                assessmentText += `${index + 1}. ${condition.disease} (${condition.confidence || 0}% likelihood)\n`;
+                            }
+                        });
+                    }
 
-                    assessmentText += `\nUrgency Level: ${triageResult.urgency_level.toUpperCase()}\n\n`;
-                    assessmentText += `Recommendations:\n`;
-                    triageResult.recommendations.forEach(rec => {
-                        assessmentText += `• ${rec}\n`;
-                    });
+                    assessmentText += `\nUrgency Level: ${triageResult.urgency_level ? triageResult.urgency_level.toUpperCase() : 'ROUTINE'}\n\n`;
 
-                    assessmentText += `\nActions:\n`;
-                    triageResult.actions.forEach(action => {
-                        assessmentText += `• ${action}\n`;
-                    });
+                    // Handle recommendations and actions with fallbacks
+                    if (triageResult.recommendations && Array.isArray(triageResult.recommendations) && triageResult.recommendations.length > 0) {
+                        assessmentText += `Recommendations:\n`;
+                        triageResult.recommendations.forEach(rec => {
+                            assessmentText += `• ${rec}\n`;
+                        });
+                    }
+
+                    if (triageResult.actions && Array.isArray(triageResult.actions) && triageResult.actions.length > 0) {
+                        assessmentText += `\nActions:\n`;
+                        triageResult.actions.forEach(action => {
+                            assessmentText += `• ${action}\n`;
+                        });
+                    }
+
+                    // Fallback recommendations if none provided
+                    if ((!triageResult.recommendations || !Array.isArray(triageResult.recommendations) || triageResult.recommendations.length === 0) &&
+                        (!triageResult.actions || !Array.isArray(triageResult.actions) || triageResult.actions.length === 0)) {
+                        assessmentText += `Recommendations:\n• Monitor your symptoms closely\n• Seek medical attention if symptoms worsen\n• Stay hydrated and rest\n• Consult a healthcare professional for proper diagnosis\n`;
+                    }
 
                     responseText = assessmentText +
                         "\n\nIf your condition worsens or you need immediate help, please contact emergency services or go to the nearest hospital." +
-                        "\n\nFor follow-up care, you can schedule a consultation.";
+                        "\n\nFor follow-up care:" +
+                        "\n- Reply 'consultation' to schedule a general consultation" +
+                        "\n- Reply 'appointment' to view available appointment slots" +
+                        "\n- Reply 'exit' to opt out of this conversation";
 
                     // Clear conversation state
                     conversationStates.delete(conversationKey);
@@ -285,7 +308,7 @@ router.post('/', async (req, res) => {
                         parameters: {}
                     });
 
-                } else {
+                } else if (nextQuestion && typeof nextQuestion === 'object') {
                     // Ask next question with options
                     let formattedQuestion = nextQuestion.question;
 
@@ -314,7 +337,14 @@ router.post('/', async (req, res) => {
 
                 responseText = "Based on your symptoms, here is my assessment:\n\n" + evaluateTriage(symptomParams) +
                     "\n\nIf your condition worsens or you need immediate help, please contact emergency services or go to the nearest hospital." +
-                    "\n\nFor follow-up care, you can schedule a consultation.";
+                    "\n\nFor follow-up care:" +
+                    "\n- Reply 'consultation' to schedule a general consultation" +
+                    "\n- Reply 'appointment' to view available appointment slots" +
+                    "\n- Reply 'exit' to opt out of this conversation";
+                break;
+
+            case 'OptOut':
+                responseText = "Thank you for using TeleMed. Goodbye!";
                 break;
 
             default:
