@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { evaluateTriage } = require('../logic/logic');
-const { Doctor } = require('../models/db');
+const { Doctor, TemporaryBookingReference } = require('../models/db');
 const { enhancedTriage, getNextQuestion, questionMappings: medicalQuestionMappings } = require('../logic/medical_dictionary');
 
 // In-memory conversation state storage (in production, use Redis/database)
@@ -87,6 +87,8 @@ router.post('/', async (req, res) => {
                 try {
                     const doctors = await Doctor.find({}).sort({ workload: 1 }).limit(5); // Get top 5 least busy doctors
                     let response = "Available appointment slots:\n\n";
+                    let slotNumber = 1; // Global slot counter across all doctors
+                    const bookingReferences = []; // Store references for temporary booking
 
                     for (let i = 0; i < doctors.length; i++) {
                         const doctor = doctors[i];
@@ -94,17 +96,49 @@ router.post('/', async (req, res) => {
                             response += `${i + 1}. Dr. ${doctor.name}\n`;
                             doctor.availability.slice(0, 3).forEach((slot, slotIndex) => { // Show only next 3 slots
                                 if (!slot.isBooked && new Date(slot.startTime) > new Date()) {
-                                    response += `   ${String.fromCharCode(65 + slotIndex)}. ${new Date(slot.startTime).toLocaleString()} (${new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime()} min)\n`;
+                                    const slotTime = new Date(slot.startTime);
+                                    const timeString = slotTime.toLocaleString('en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: true
+                                    });
+                                    const dateString = slotTime.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+                                    response += `   ${slotNumber}. ${timeString} on ${dateString}\n`;
+
+                                    // Store booking reference for this slot
+                                    bookingReferences.push({
+                                        bookingReferenceId: slotNumber,
+                                        doctorId: doctor._id,
+                                        slotId: slot._id
+                                    });
+
+                                    slotNumber++; // Increment global slot counter
                                 }
                             });
                             response += "\n";
                         }
                     }
 
-                    if (response === "Available appointment slots:\n\n") {
+                    if (slotNumber === 1 || bookingReferences.length === 0) { // No slots were added
                         response = "No appointment slots are currently available. Please try again later or contact us directly.";
                     } else {
-                        response += "Reply with 'choose 1' to book with the first doctor, or visit our web portal for full scheduling.";
+                        // Save temporary booking references for this session
+                        try {
+                            await TemporaryBookingReference.findOneAndUpdate(
+                                { dialogflowSessionId: sessionId },
+                                {
+                                    dialogflowSessionId: sessionId,
+                                    references: bookingReferences
+                                },
+                                { upsert: true, new: true }
+                            );
+                            console.log(`Created ${bookingReferences.length} temporary booking references for session ${sessionId}`);
+                        } catch (refError) {
+                            console.error('Error saving temporary booking references:', refError);
+                            // Continue with response even if reference saving fails
+                        }
+
+                        response += "Reply with 'book 1', 'book 2', etc. to book an appointment.";
                     }
 
                     responseText = response;
@@ -115,12 +149,58 @@ router.post('/', async (req, res) => {
                 break;
 
             case 'BookAppointmentConfirmation':
-                // Handle booking confirmation through webhook
-                const bookingReferenceId = params.bookingReferenceId?.numberValue;
-                if (bookingReferenceId) {
-                    responseText = `Your appointment with reference ${bookingReferenceId} has been confirmed. You will receive a confirmation SMS with details.`;
-                } else {
-                    responseText = "Please provide a valid booking reference ID to confirm your appointment.";
+                // Handle direct slot booking based on displayed slot numbers
+                const slotNumber = parseInt(params.bookingReferenceId?.numberValue);
+
+                if (!slotNumber || typeof slotNumber !== 'number' || slotNumber < 1) {
+                    responseText = "Please provide a valid slot number to book an appointment.";
+                    break;
+                }
+
+                try {
+                    // Find the actual slot based on the displayed slot number (same logic as ShowAvailableAppointments)
+                    const doctors = await Doctor.find({}).sort({ workload: 1 }).limit(5); // Same limit as display
+                    let foundSlot = null;
+                    let matchedDoctor = null;
+                    let globalSlotNumber = 1; // Track global numbering (must match display logic)
+
+                    // Iterate through doctors and their slots in SAME order as display
+                    for (let i = 0; i < doctors.length; i++) {
+                        const doctor = doctors[i];
+                        if (doctor.availability && doctor.availability.length > 0) {
+                            // Check only next 3 slots per doctor (same as display)
+                            doctor.availability.slice(0, 3).forEach((slot, slotIndex) => {
+                                if (!slot.isBooked && new Date(slot.startTime) > new Date()) {
+                                    if (globalSlotNumber === slotNumber) {
+                                        foundSlot = slot;
+                                        matchedDoctor = doctor;
+                                        return; // Exit forEach early
+                                    }
+                                    globalSlotNumber++;
+                                }
+                            });
+                            if (foundSlot) return; // Exit doctor loop early if found
+                        }
+                    }
+
+                    if (!foundSlot || !matchedDoctor) {
+                        responseText = "Sorry, the selected slot is no longer available or invalid. Please request available appointments again.";
+                    } else {
+                        // Webhook cannot directly book appointments like SMS can
+                        // Send message instructing user to complete booking via SMS or web
+                        const slotTime = new Date(foundSlot.startTime);
+                        const timeString = slotTime.toLocaleString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        const dateString = slotTime.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+
+                        responseText = `Found available slot: ${timeString} on ${dateString} with Dr. ${matchedDoctor.name}\n\nTo book this appointment, please:\n- Use SMS: Reply "book ${slotNumber}" via SMS\n- Or visit our web portal\n\nThis is more secure for appointment booking.`;
+                    }
+                } catch (error) {
+                    console.error('Error booking appointment slot:', error);
+                    responseText = "Sorry, there was an error booking your appointment. Please try again.";
                 }
                 break;
             case 'SymptomChecker':

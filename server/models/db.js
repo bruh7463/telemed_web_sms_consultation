@@ -49,7 +49,7 @@ const Doctor = mongoose.model('Doctor', doctorSchema);
 const consultationSchema = new mongoose.Schema({
     patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
     doctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true },
-    status: { type: String, enum: ['PENDING', 'ACTIVE', 'COMPLETED', 'SCHEDULED'], default: 'PENDING' },
+    status: { type: String, enum: ['PENDING', 'ACTIVE', 'COMPLETED', 'SCHEDULED', 'CANCELLED'], default: 'PENDING' },
     bookingReason: { type: String },
     bookingChannel: { type: String, enum: ['frontend', 'sms'], default: 'frontend' }, // Track how consultation was booked
     messages: [{

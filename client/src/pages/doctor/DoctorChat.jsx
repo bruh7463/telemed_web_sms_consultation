@@ -292,15 +292,6 @@ const DoctorChat = ({ selectedConsultation: propSelectedConsultation }) => {
                                             Age: {medicalHistory?.patient?.dateOfBirth ? calculateAge(medicalHistory.patient.dateOfBirth) : 'Not set'}
                                         </span>
                                     </div>
-                                    <div className="flex items-center mt-2 space-x-4">
-                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                                            selectedConsultation.communicationMethod === 'SMS'
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-purple-100 text-purple-800'
-                                        }`}>
-                                            {selectedConsultation.communicationMethod === 'SMS' ? '📱 SMS Patient' : '🌐 Web Patient'}
-                                        </span>
-                                    </div>
                                 </div>
                                 <button
                                     onClick={() => setShowMedicalHistory(false)}

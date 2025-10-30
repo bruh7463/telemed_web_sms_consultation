@@ -3,7 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { Patient, Consultation, TemporaryBookingReference, Prescription } = require('../models/db');
+const { Patient, Consultation, TemporaryBookingReference, Prescription, Doctor } = require('../models/db');
 const { detectIntent } = require('../services/dialogflow');
 const { sendSms } = require('../services/textbee_sms')
 const { createAndScheduleConsultation, bookConsultationSlot, cancelAppointment, rescheduleAppointment, getUpcomingAppointments, evaluateTriage } = require('../logic/logic');
@@ -76,35 +76,6 @@ router.post('/incoming', async (req, res) => {
                 // Cancel the only appointment
                 await cancelAppointment(patient, upcomingAppointments[0]._id);
                 return res.status(200).send('SMS processed: Appointment cancelled.');
-            } else {
-                // Multiple appointments - ask which one
-                let message = 'You have multiple upcoming appointments:\n';
-                upcomingAppointments.forEach((appt, index) => {
-                    message += `${index + 1}. ${new Date(appt.scheduledStart).toLocaleString()} with Dr. ${appt.doctor.name}\n`;
-                });
-                message += 'Reply with "cancel 1", "cancel 2", etc. to cancel a specific appointment.';
-                await sendSms(from, TEXTBEE_SENDER_ID, message);
-                return res.status(200).send('SMS processed: Multiple appointments found.');
-            }
-        }
-
-        // Handle specific cancellation by number
-        const cancelMatch = lowerContent.match(/cancel\s+(\d+)/);
-        if (cancelMatch) {
-            if (patient.nrc.startsWith('TEMP-')) {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
-                return res.status(200).send('SMS processed: Patient needs to register first.');
-            }
-
-            const appointmentIndex = parseInt(cancelMatch[1]) - 1;
-            const upcomingAppointments = await getUpcomingAppointments(patient);
-
-            if (appointmentIndex >= 0 && appointmentIndex < upcomingAppointments.length) {
-                await cancelAppointment(patient, upcomingAppointments[appointmentIndex]._id);
-                return res.status(200).send('SMS processed: Appointment cancelled.');
-            } else {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid appointment number. Please check your upcoming appointments.');
-                return res.status(200).send('SMS processed: Invalid appointment number.');
             }
         }
 
@@ -122,14 +93,49 @@ router.post('/incoming', async (req, res) => {
             }
 
             if (upcomingAppointments.length === 1) {
-                // Show available slots for rescheduling
-                await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel and book a new appointment.');
-                return res.status(200).send('SMS processed: Reschedule request noted.');
+                // Show available slots for rescheduling the single appointment
+                const appointment = upcomingAppointments[0];
+                const doctor = await Doctor.findById(appointment.doctor);
+                if (doctor && doctor.availability && doctor.availability.length > 0) {
+                    // Show doctor's available slots for rescheduling
+                    let message = `Select a new slot to reschedule your appointment with Dr. ${doctor.name}:\n\n`;
+                    let slotNumber = 1;
+                    doctor.availability.slice(0, 5).forEach((slot, slotIndex) => { // Show max 5 slots
+                        if (!slot.isBooked && new Date(slot.startTime) > new Date()) {
+                            const timeString = new Date(slot.startTime).toLocaleString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                            });
+                            const dateString = new Date(slot.startTime).toLocaleDateString('en-GB');
+                            message += `${slotNumber}. ${timeString} on ${dateString}\n`;
+                            slotNumber++;
+                        }
+                    });
+
+                    if (slotNumber === 1) {
+                        await sendSms(from, TEXTBEE_SENDER_ID, 'No slots are currently available for rescheduling. Please contact us directly or cancel and book a new appointment.');
+                        return res.status(200).send('SMS processed: No available slots.');
+                    }
+
+                    message += '\nReply with "move 1", "move 2", etc. to select a new slot.';
+                    await sendSms(from, TEXTBEE_SENDER_ID, message);
+                    return res.status(200).send('SMS processed: Reschedule slots shown.');
+                } else {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel and book a new appointment.');
+                    return res.status(200).send('SMS processed: Reschedule request noted.');
+                }
             } else {
                 // Multiple appointments - ask which one
                 let message = 'You have multiple upcoming appointments:\n';
                 upcomingAppointments.forEach((appt, index) => {
-                    message += `${index + 1}. ${new Date(appt.scheduledStart).toLocaleString()} with Dr. ${appt.doctor.name}\n`;
+                    const timeString = new Date(appt.scheduledStart).toLocaleString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+                    const dateString = new Date(appt.scheduledStart).toLocaleDateString('en-GB');
+                    message += `${index + 1}. ${timeString} on ${dateString} with Dr. ${appt.doctor.name}\n`;
                 });
                 message += 'Please specify which appointment you want to reschedule by replying with "reschedule 1", "reschedule 2", etc.';
                 await sendSms(from, TEXTBEE_SENDER_ID, message);
@@ -137,7 +143,7 @@ router.post('/incoming', async (req, res) => {
             }
         }
 
-        // Handle specific reschedule by number
+        // Handle specific reschedule by number (selecting which appointment)
         const rescheduleMatch = lowerContent.match(/reschedule\s+(\d+)/);
         if (rescheduleMatch) {
             if (patient.nrc.startsWith('TEMP-')) {
@@ -149,12 +155,131 @@ router.post('/incoming', async (req, res) => {
             const upcomingAppointments = await getUpcomingAppointments(patient);
 
             if (appointmentIndex >= 0 && appointmentIndex < upcomingAppointments.length) {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel this appointment and book a new one.');
-                return res.status(200).send('SMS processed: Reschedule request noted.');
+                const appointment = upcomingAppointments[appointmentIndex];
+                const doctor = await Doctor.findById(appointment.doctor);
+                if (doctor && doctor.availability && doctor.availability.length > 0) {
+                    // Show doctor's available slots for rescheduling
+                    let message = `Select a new slot to reschedule your appointment with Dr. ${doctor.name}:\n\n`;
+                    let slotNumber = 1;
+                    doctor.availability.slice(0, 5).forEach((slot, slotIndex) => { // Show max 5 slots
+                        if (!slot.isBooked && new Date(slot.startTime) > new Date()) {
+                            const timeString = new Date(slot.startTime).toLocaleString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                            });
+                            const dateString = new Date(slot.startTime).toLocaleDateString('en-GB');
+                            message += `${slotNumber}. ${timeString} on ${dateString}\n`;
+                            slotNumber++;
+                        }
+                    });
+
+                    if (slotNumber === 1) {
+                        await sendSms(from, TEXTBEE_SENDER_ID, 'No slots are currently available for rescheduling. Please contact us directly or cancel and book a new appointment.');
+                        return res.status(200).send('SMS processed: No available slots.');
+                    }
+
+                    message += '\nReply with "move 1", "move 2", etc. to select a new slot.';
+                    await sendSms(from, TEXTBEE_SENDER_ID, message);
+                    return res.status(200).send('SMS processed: Reschedule slots shown.');
+                } else {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'To reschedule your appointment, please visit our web portal or contact us directly. You can also cancel this appointment and book a new one.');
+                    return res.status(200).send('SMS processed: Reschedule request noted.');
+                }
             } else {
                 await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid appointment number. Please check your upcoming appointments.');
                 return res.status(200).send('SMS processed: Invalid appointment number.');
             }
+        }
+
+        // Handle moving appointment to new slot
+        const moveMatch = lowerContent.match(/move\s+(\d+)/);
+        if (moveMatch) {
+            if (patient.nrc.startsWith('TEMP-')) {
+                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
+                return res.status(200).send('SMS processed: Patient needs to register first.');
+            }
+
+            const moveNumber = parseInt(moveMatch[1]) - 1; // Convert to 0-based
+            const upcomingAppointments = await getUpcomingAppointments(patient);
+
+            if (upcomingAppointments.length === 1) {
+                // Single appointment - use it
+                const appointment = upcomingAppointments[0];
+                const doctor = await Doctor.findById(appointment.doctor);
+
+                if (doctor && moveNumber >= 0) {
+                    // Collect available slots into array to reference by move number
+                    const availableSlots = [];
+                    doctor.availability.slice(0, 10).forEach((slot) => { // Check more slots for availability
+                        if (!slot.isBooked && new Date(slot.startTime) > new Date()) {
+                            availableSlots.push(slot);
+                        }
+                    });
+
+                    if (moveNumber < availableSlots.length) {
+                        const newSlot = availableSlots[moveNumber];
+                        // Reschedule to new slot
+                        await rescheduleAppointment(patient, appointment._id, newSlot._id);
+                        return res.status(200).send('SMS processed: Appointment rescheduled.');
+                    } else {
+                        await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid slot number. Please choose a different slot.');
+                        return res.status(200).send('SMS processed: Invalid slot.');
+                    }
+                } else {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'No doctor information available. Please try again.');
+                    return res.status(200).send('SMS processed: No doctor info.');
+                }
+            } else {
+                // Multiple appointments - need to specify which one first
+                await sendSms(from, TEXTBEE_SENDER_ID, 'You have multiple appointments. Please first specify which appointment to reschedule with "reschedule 1", "reschedule 2", etc., then select a new slot.');
+                return res.status(200).send('SMS processed: Multiple appointments - need to specify first.');
+            }
+        }
+
+        // Handle help commands
+        if (lowerContent.includes('/help') || lowerContent.includes('how to use') || lowerContent.includes('what can i do')) {
+            let helpMessage = `TELEMED HELP GUIDE\n\n`;
+
+            helpMessage += `ACCOUNT REGISTRATION:\n`;
+            helpMessage += `\"book consultation\" - Start registration process\n\n`;
+
+            helpMessage += `HEALTH SYMPTOMS:\n`;
+            helpMessage += `\"fever\", \"respiratory\", \"digestive\", \"heart\" - Assessment by category\n`;
+            helpMessage += `\"continue\" - Proceed with symptom questions\n\n`;
+
+            helpMessage += `APPOINTMENTS:\n`;
+            helpMessage += `\"book 1\", \"book 2\" - Book available slots\n`;
+            helpMessage += `\"my appointments\" - View upcoming appointments\n`;
+            helpMessage += `\"cancel 1\", \"cancel 2\" - Cancel specific appointments\n`;
+            helpMessage += `\"reschedule 1\" - Start rescheduling process\n`;
+            helpMessage += `\"move 1\", \"move 2\" - Select new slots when rescheduling\n\n`;
+
+            helpMessage += `PRESCRIPTIONS:\n`;
+            helpMessage += `\"my prescriptions\" - View your prescriptions\n`;
+            helpMessage += `\"view 1\", \"prescription 2\" - See specific prescription details\n\n`;
+
+            helpMessage += `MEDICAL HISTORY:\n`;
+            helpMessage += `\"update medical\" - Update your health records\n`;
+            helpMessage += `\"add aspirin 100mg daily\" - Add medication\n`;
+            helpMessage += `\"remove med 1\" - Remove medication\n`;
+            helpMessage += `\"add allergy penicillin rash moderate\" - Add allergy\n`;
+            helpMessage += `\"weight 70\", \"bp 120/80\", \"temp 36.5\" - Update vitals\n`;
+            helpMessage += `\"smoking former\", \"alcohol moderate\" - Update lifestyle\n\n`;
+
+            helpMessage += `SUPPORT:\n`;
+            helpMessage += `\"help\" - Show this help guide\n\n`;
+
+            helpMessage += `EMERGENCY:\n`;
+            helpMessage += `If you have a medical emergency, please contact emergency services immediately or go to the nearest hospital.`;
+
+            // Truncate if too long for SMS (SMS has character limits)
+            if (helpMessage.length > 1400) {
+                helpMessage = helpMessage.substring(0, 1350) + '...\n\nSend "help" for full guide via dashboard.';
+            }
+
+            await sendSms(from, TEXTBEE_SENDER_ID, helpMessage);
+            return res.status(200).send('SMS processed: Help guide sent.');
         }
 
         // Handle appointment status queries
@@ -187,7 +312,10 @@ router.post('/incoming', async (req, res) => {
             }
 
             try {
-                const prescriptions = await Prescription.find({ patient: patient._id })
+                const prescriptions = await Prescription.find({
+                    patient: patient._id,
+                    status: 'ACTIVE'
+                })
                     .populate('doctor', 'name specialty')
                     .sort({ createdAt: -1 })
                     .limit(10); // Show up to 10 prescriptions
@@ -281,35 +409,37 @@ router.post('/incoming', async (req, res) => {
             }
 
             // Present options for medical history fields that can be updated via SMS
-            const message = `Update Medical History\n\nSelect field to update:\n1. Current Medications\n2. Allergies\n3. Vital Signs (Weight, BP, etc.)\n4. Social History (Smoking/Alcohol)\n\nReply with the number (e.g., "1" for medications)`;
+            const message = `Update Medical History\n\nSelect field to update:\n1. Current Medications\n2. Allergies\n3. Vital Signs (Weight, BP, etc.)\n4. Social History (Smoking/Alcohol)\n\nReply with "history 1", "history 2", etc.`;
             await sendSms(from, TEXTBEE_SENDER_ID, message);
             return res.status(200).send('SMS processed: Medical history options sent.');
         }
 
-        // Handle medical history field selection (e.g., "1", "2", etc.)
-        const medicalFieldMatch = lowerContent.match(/^(?:update\s+)?(?:field\s+)?(\d+)$/);
+        // Handle medical history field selection (e.g., "history 1", "history 2", etc.) - only for medical update context
+        // This should only trigger if the user has recently requested to update medical history
+        const medicalFieldMatch = lowerContent.match(/history\s+(\d)/);
         if (medicalFieldMatch) {
             const fieldNumber = parseInt(medicalFieldMatch[1]);
 
             if (patient.nrc.startsWith('TEMP-')) {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
-                return res.status(200).send('SMS processed: Patient needs to register first.');
-            }
+                // Check if this might be part of chatbot flow - don't intercept medical history commands if temp patient
+                // Skip medical field processing for temp patients and let it go to Dialogflow
+                console.log('Skipping medical history match for temp patient:', patient.nrc);
+            } else {
+                // Only process if patient is registered
+                const fieldMap = {
+                    1: 'currentMedications',
+                    2: 'allergies',
+                    3: 'vitalSigns',
+                    4: 'socialHistory'
+                };
 
-            const fieldMap = {
-                1: 'currentMedications',
-                2: 'allergies',
-                3: 'vitalSigns',
-                4: 'socialHistory'
-            };
+                const selectedField = fieldMap[fieldNumber];
+                if (!selectedField) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid option. Please select 1-4 for medical history fields.');
+                    return res.status(200).send('SMS processed: Invalid selection.');
+                }
 
-            const selectedField = fieldMap[fieldNumber];
-            if (!selectedField) {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'Invalid option. Please select 1-4 for medical history fields.');
-                return res.status(200).send('SMS processed: Invalid selection.');
-            }
-
-            if (selectedField === 'currentMedications') {
+                if (selectedField === 'currentMedications') {
                 // List current medications first
                 const { MedicalHistory } = require('../models/db');
                 const medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
@@ -322,8 +452,8 @@ router.post('/incoming', async (req, res) => {
                 } else {
                     message += 'No current medications recorded.\n';
                 }
-                message += '\nTo ADD a medication, reply with: "add med [name] [dosage] [frequency]"\n';
-                message += 'Example: "add med aspirin 100mg daily"\n\n';
+                message += '\nTo ADD a medication, reply with: "add medication_name dosage frequency"\n';
+                message += 'Examples:\n"add aspirin 100mg daily"\n"add panadol 500mg twice daily"\n"add amoxicillin 250mg every 8 hours"\n\n';
                 message += 'To REMOVE a medication, reply with: "remove med [number]"\n';
                 message += 'Example: "remove med 1"';
 
@@ -399,34 +529,79 @@ router.post('/incoming', async (req, res) => {
                 await sendSms(from, TEXTBEE_SENDER_ID, message);
                 return res.status(200).send('SMS processed: Social history options shown.');
             }
+            }
         }
 
         // Handle medication updates: adding and removing
-        const addMedMatch = lowerContent.match(/add med(?:ication)?\s+(.+)/i);
+        const addMedMatch = lowerContent.match(/add\s+(?:med|medication|meds)?\s*(.+?)\s+(\d+(?:\.\d+)?\s*[a-z]+(?:\s*[a-z]+)*|\d+(?:\.\d+)?\s*[a-z]+)\s+(.+)/i);
         if (addMedMatch) {
             if (patient.nrc.startsWith('TEMP-')) {
                 await sendSms(from, TEXTBEE_SENDER_ID, 'Please register or verify your account first. Type "book consultation" to get started.');
                 return res.status(200).send('SMS processed: Patient needs to register first.');
             }
 
-            const medDetails = addMedMatch[1].trim();
-            // Simple parsing: assume format "name dosage frequency"
-            const parts = medDetails.split(/\s+/);
-            if (parts.length < 3) {
-                await sendSms(from, TEXTBEE_SENDER_ID, 'Please provide medication in format: "add med [name] [dosage] [frequency]"\nExample: "add med aspirin 100mg daily"');
-                return res.status(200).send('SMS processed: Invalid medication format.');
+            let medication, dosage, frequency;
+
+            if (addMedMatch[1] && addMedMatch[2] && addMedMatch[3]) {
+                medication = addMedMatch[1].trim();
+                dosage = addMedMatch[2].trim();
+                frequency = addMedMatch[3].trim();
+            } else {
+                // Fallback parsing for edge cases
+                const medDetails = addMedMatch[1]?.trim();
+                if (!medDetails) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'Please provide medication in format: "add medication_name dosage frequency"\nExamples:\n"add aspirin 100mg daily"\n"add panadol 500mg twice daily"\n"add amoxicillin 250mg every 8 hours"');
+                    return res.status(200).send('SMS processed: Invalid medication format.');
+                }
+
+                const words = medDetails.split(/\s+/);
+                if (words.length < 3) {
+                    await sendSms(from, TEXTBEE_SENDER_ID, 'Please provide medication in format: "add medication_name dosage frequency"\nExamples:\n"add aspirin 100mg daily"\n"add panadol 500mg twice daily"\n"add amoxicillin 250mg every 8 hours"');
+                    return res.status(200).send('SMS processed: Incomplete medication information.');
+                }
+
+                medication = words[0];
+                dosage = words[1];
+                frequency = words.slice(2).join(' ');
             }
 
-            const medication = parts[0];
-            const dosage = parts[1];
-            const frequency = parts.slice(2).join(' ');
+            // Common frequency patterns
+            const commonFrequencies = [
+                'once daily', 'twice daily', 'three times daily', 'four times daily',
+                'daily', 'every 6 hours', 'every 8 hours', 'every 12 hours',
+                'as needed', 'prn', 'morning', 'evening', 'night', 'twice weekly',
+                'once weekly', 'every morning', 'every evening'
+            ];
+
+            // Check if frequency matches common patterns
+            const lowerFreq = frequency.toLowerCase();
+            const isValidFrequency = commonFrequencies.some(freq =>
+                lowerFreq.includes(freq) ||
+                freq.includes(lowerFreq) ||
+                lowerFreq.includes('daily') ||
+                lowerFreq.includes('hourly') ||
+                lowerFreq.includes('weekly') ||
+                lowerFreq.includes('prn') ||
+                lowerFreq.includes('as needed')
+            );
+
+            if (!isValidFrequency && lowerFreq.length < 20) { // Allow longer custom frequencies
+                await sendSms(from, TEXTBEE_SENDER_ID, `Please specify a valid frequency.\nCommon examples:\n• daily, twice daily, three times daily\n• every 6 hours, every 8 hours, every 12 hours\n• as needed (prn)\n• once weekly, twice weekly\n\nExample: "add aspirin 100mg twice daily"`);
+                return res.status(200).send('SMS processed: Invalid frequency.');
+            }
 
             try {
                 const { MedicalHistory } = require('../models/db');
                 let medicalHistory = await MedicalHistory.findOne({ patient: patient._id });
 
                 if (!medicalHistory) {
-                    medicalHistory = new MedicalHistory({ patient: patient._id });
+                    medicalHistory = new MedicalHistory({
+                        patient: patient._id,
+                        createdBy: patient._id,
+                        createdByType: 'patient',
+                        updatedBy: patient._id,
+                        updatedByType: 'patient'
+                    });
                 }
 
                 medicalHistory.currentMedications.push({
@@ -805,7 +980,10 @@ router.post('/incoming', async (req, res) => {
             const prescriptionIndex = parseInt(prescriptionSelectMatch[1]) - 1; // Convert to 0-based index
 
             try {
-                const prescriptions = await Prescription.find({ patient: patient._id })
+                const prescriptions = await Prescription.find({
+                    patient: patient._id,
+                    status: 'ACTIVE'
+                })
                     .populate('doctor', 'name specialty')
                     .sort({ createdAt: -1 })
                     .limit(10);
@@ -1026,14 +1204,14 @@ router.post('/incoming', async (req, res) => {
                 return res.status(200).send('SMS received, Dialogflow webhook initiated.');
 
             } else if (intentName === 'BookAppointmentConfirmation') {
-                const bookingReferenceId = params.bookingReferenceId?.numberValue;
+                        const bookingReferenceId = parseInt(params.bookingReferenceId?.numberValue);
 
-                if (!patient || patient.nrc.startsWith('TEMP-')) { 
+                if (!patient || patient.nrc.startsWith('TEMP-')) {
                     await sendSms(from, TEXTBEE_SENDER_ID, "Please register or verify your account first before booking an appointment. Type 'book consultation' and use the 'New Patient' option to register.");
-                    return; 
+                    return;
                 }
 
-                if (dialogflowResult.allRequiredParamsPresent && bookingReferenceId) {
+                if (dialogflowResult.allRequiredParamsPresent && bookingReferenceId && typeof bookingReferenceId === 'number') {
                     try {
                         const tempRefs = await TemporaryBookingReference.findOne({ dialogflowSessionId: patient.dialogflowSessionId });
                         const bookingRef = tempRefs?.references.find(ref => ref.bookingReferenceId === bookingReferenceId);

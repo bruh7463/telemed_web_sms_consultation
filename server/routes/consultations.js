@@ -99,17 +99,17 @@ router.post('/:id/doctor/messages', protect, async (req, res) => {
                 console.error('TEXTBEE_SENDER_ID environment variable is not set. SMS cannot be sent.');
                 console.log('Doctor response stored in database (SMS failed due to missing config)');
             } else {
-                console.log(`📱 Sending SMS response to patient ${consultation.patient.phoneNumber}: "${req.body.content}"`);
+                console.log(`Sending SMS response to patient ${consultation.patient.phoneNumber}: "${req.body.content}"`);
                 try {
                     await sendSms(consultation.patient.phoneNumber, TEXTBEE_SENDER_ID, req.body.content);
-                    console.log('✅ SMS response sent successfully');
+                    console.log('SMS response sent successfully');
                 } catch (smsError) {
-                    console.error('❌ Failed to send SMS response:', smsError.message);
+                    console.error('Failed to send SMS response:', smsError.message);
                 }
             }
         } else {
             // For frontend messages, only store in database - no SMS
-            console.log('💻 Doctor response to frontend message - stored in database only');
+            console.log('Doctor response to frontend message - stored in database only');
         }
 
         res.status(201).json(consultation);

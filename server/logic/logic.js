@@ -70,8 +70,19 @@ async function createAndScheduleConsultation(patient, reason, slotId) {
             await doctor.save();
 
             console.log(`Consultation ${consultation._id} created for patient ${patient.phoneNumber} and assigned to Dr. ${doctor.name} at ${bookedSlot.startTime}.`);
-            
-            const confirmationMessage = `Your appointment${reasonPhrase} is confirmed with Dr. ${doctor.name} on ${new Date(bookedSlot.startTime).toLocaleString()}.`;
+
+            const dateObj = new Date(bookedSlot.startTime);
+            const timeString = dateObj.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            const dateString = dateObj.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            const confirmationMessage = `Your appointment${reasonPhrase} is confirmed with Dr. ${doctor.name} on ${dateString} at ${timeString}.`;
 
             if (TEXTBEE_SENDER_ID) {
                 await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, confirmationMessage);
@@ -188,7 +199,18 @@ async function bookConsultationSlot(patient, doctorId, slotId, reason) {
         console.log(`Consultation ${consultation._id} created for patient ${patient.phoneNumber} and assigned to Dr. ${doctor.name} at ${slot.startTime}.`);
 
         const reasonPhrase = reason && reason.trim() !== '' ? ` for "${reason}"` : '';
-        const confirmationMessage = `Your appointment${reasonPhrase} is confirmed with Dr. ${doctor.name} on ${new Date(slot.startTime).toLocaleString()}.`;
+        const dateObj = new Date(slot.startTime);
+        const timeString = dateObj.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const dateString = dateObj.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        const confirmationMessage = `Your appointment${reasonPhrase} is confirmed with Dr. ${doctor.name} on ${dateString} at ${timeString}.`;
 
         if (TEXTBEE_SENDER_ID) {
             await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, confirmationMessage);
@@ -236,7 +258,9 @@ async function cancelAppointment(patient, appointmentId) {
         if (consultation.status === 'SCHEDULED') {
             const doctor = await Doctor.findById(consultation.doctor);
             if (doctor) {
-                const slot = doctor.availability.id(consultation.scheduledStart);
+                const slot = doctor.availability.find(s =>
+                    new Date(s.startTime).getTime() === new Date(consultation.scheduledStart).getTime()
+                );
                 if (slot) {
                     slot.isBooked = false;
                     await doctor.save();
@@ -306,39 +330,60 @@ async function rescheduleAppointment(patient, appointmentId, newSlotId) {
             return false;
         }
 
-        // Free up the old slot if it was scheduled
+        // Free up the old slot - since we're rescheduling to available slots of the same doctor,
+        // find the slot that matches the current consultation time and free it
         if (consultation.status === 'SCHEDULED') {
             const oldDoctor = await Doctor.findById(consultation.doctor);
             if (oldDoctor) {
-                const oldSlot = oldDoctor.availability.id(consultation.scheduledStart);
-                if (oldSlot) {
-                    oldSlot.isBooked = false;
-                    await oldDoctor.save();
+                const oldScheduledTime = new Date(consultation.scheduledStart);
+                const oldSlotIndex = oldDoctor.availability.findIndex(s => new Date(s.startTime).getTime() === oldScheduledTime.getTime());
+
+                if (oldSlotIndex !== -1) {
+                    const oldSlot = oldDoctor.availability[oldSlotIndex];
+                    console.log(`Found old slot at index ${oldSlotIndex}, isBooked: ${oldSlot.isBooked}, setting to false`);
+
+                    oldSlot.isBooked = false; // Free the old slot
+                    oldDoctor.markModified(`availability.${oldSlotIndex}.isBooked`); // Ensure Mongoose knows it changed
+
+                    try {
+                        await oldDoctor.save();
+                        console.log(`Old slot freed successfully at index ${oldSlotIndex}, isBooked: ${oldDoctor.availability[oldSlotIndex].isBooked}`);
+                    } catch (saveError) {
+                        console.error('Failed to save doctor with freed slot:', saveError);
+                        return false; // Exit with error
+                    }
+                } else {
+                    console.log(`No matching slot found for time: ${oldScheduledTime.toISOString()}`);
                 }
-                // Decrease old doctor's workload
-                oldDoctor.workload = Math.max(0, (oldDoctor.workload || 0) - 1);
-                await oldDoctor.save();
+            } else {
+                console.log(`Doctor not found with ID: ${consultation.doctor}`);
             }
         }
 
-        // Book the new slot
+        // Book the new slot - mark it as booked
         newSlot.isBooked = true;
-        await newDoctor.save();
+        await newDoctor.save(); // Since it's the same doctor, we save here
 
-        // Update consultation
-        consultation.doctor = newDoctor._id;
+        // Update consultation - change to the new slot's time, doctor stays the same
         consultation.scheduledStart = newSlot.startTime;
         consultation.scheduledEnd = newSlot.endTime;
         consultation.status = 'SCHEDULED';
         await consultation.save();
 
-        // Increase new doctor's workload
-        newDoctor.workload = (newDoctor.workload || 0) + 1;
-        await newDoctor.save();
-
         console.log(`Appointment ${appointmentId} rescheduled for patient ${patient.phoneNumber} to ${newSlot.startTime}`);
 
-        const confirmationMessage = `Your appointment has been rescheduled to ${new Date(newSlot.startTime).toLocaleString()} with Dr. ${newDoctor.name}.`;
+        const dateObj = new Date(newSlot.startTime);
+        const timeString = dateObj.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const dateString = dateObj.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        const confirmationMessage = `Your appointment has been rescheduled to ${dateString} at ${timeString} with Dr. ${newDoctor.name}.`;
 
         if (TEXTBEE_SENDER_ID) {
             await sendSms(patient.phoneNumber, TEXTBEE_SENDER_ID, confirmationMessage);

@@ -11,6 +11,7 @@ function SMSTestingPage() {
     const [phoneNumber, setPhoneNumber] = useState('+260971234567'); // Test phone number
     const [inputMessage, setInputMessage] = useState('');
     const messagesEndRef = useRef(null);
+    const lastMessageTimestamp = useRef(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -113,6 +114,7 @@ function SMSTestingPage() {
     // Clear conversation and SMS log
     const clearConversation = async () => {
         setCurrentConversation([]);
+        lastMessageTimestamp.current = null; // Reset polling timestamp
         try {
             await testAPI.clearSmsLog();
             setMessageCount(0);
@@ -121,6 +123,54 @@ function SMSTestingPage() {
             console.error('Error clearing SMS log:', error);
         }
     };
+
+    // Poll for new doctor responses
+    const pollForDoctorResponses = async () => {
+        try {
+            const logResponse = await testAPI.getSmsLog();
+            const latestMessages = logResponse.data.messages;
+
+            if (latestMessages.length > 0) {
+                // Find messages sent TO our test phone number that are newer than our last check
+                const doctorMessages = latestMessages.filter(
+                    sms => sms.to === phoneNumber &&
+                           new Date(sms.timestamp) > (lastMessageTimestamp.current || 0)
+                );
+
+                if (doctorMessages.length > 0) {
+                    // Update last message timestamp
+                    lastMessageTimestamp.current = new Date(Math.max(...doctorMessages.map(m => new Date(m.timestamp))));
+
+                    // Add doctor messages to conversation
+                    const newDoctorMsgs = doctorMessages.map(msg => ({
+                        id: msg.id || Date.now(),
+                        direction: 'inbound',
+                        content: msg.content,
+                        timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+                        sender: 'Doctor'
+                    }));
+
+                    setCurrentConversation(prev => [...prev, ...newDoctorMsgs]);
+                }
+            }
+        } catch (error) {
+            console.debug('Error polling for doctor responses:', error.message);
+            // Don't show error alerts for background polling
+        }
+    };
+
+    // Set up polling for doctor responses
+    useEffect(() => {
+        if (isSimulatorEnabled) {
+            // Initial poll
+            pollForDoctorResponses();
+
+            // Set up polling interval (every 2 seconds)
+            const pollInterval = setInterval(pollForDoctorResponses, 2000);
+
+            return () => clearInterval(pollInterval); // Cleanup on unmount
+        }
+    }, [isSimulatorEnabled, phoneNumber]);
 
     // Pre-fill common test messages
     const fillTestMessage = (message) => {
@@ -243,24 +293,6 @@ function SMSTestingPage() {
                                     <h2 className="text-lg font-semibold text-gray-700 mb-4">Quick Test Messages</h2>
                                     <div className="grid grid-cols-1 gap-2">
                                         <button
-                                            onClick={() => fillTestMessage('symptom check')}
-                                            className="px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 text-left"
-                                        >
-                                            "symptom check" - Start triage
-                                        </button>
-                                        <button
-                                            onClick={() => fillTestMessage('1')}
-                                            className="px-3 py-2 bg-yellow-500 text-white text-sm rounded hover:bg-yellow-600 text-left"
-                                        >
-                                            "1" - Fever category
-                                        </button>
-                                        <button
-                                            onClick={() => fillTestMessage('3')}
-                                            className="px-3 py-2 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 text-left"
-                                        >
-                                            "3" - Symptoms option
-                                        </button>
-                                        <button
                                             onClick={() => fillTestMessage('book consultation')}
                                             className="px-3 py-2 bg-purple-500 text-white text-sm rounded hover:bg-purple-600 text-left"
                                         >
@@ -273,60 +305,16 @@ function SMSTestingPage() {
                                             "my appointments" - Check appointments
                                         </button>
                                         <button
-                                            onClick={() => fillTestMessage('help')}
-                                            className="px-3 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 text-left"
+                                            onClick={() => fillTestMessage('i feel week')}
+                                            className="px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 text-left"
                                         >
-                                            "help" - General help
+                                            "i feel week" - Medical symptom
                                         </button>
-                                    </div>
-
-                                    <div className="mt-6">
-                                        <h3 className="text-md font-semibold text-gray-700 mb-2">Triage Test Cases</h3>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <button
-                                                onClick={() => fillTestMessage('Yes, severe (can\u0027t complete sentences)')}
-                                                className="px-3 py-2 bg-red-500 text-white text-xs rounded hover:bg-red-600 text-left"
-                                                title="Severe breathing - should trigger EMERGENCY"
-                                            >
-                                                Severe Breathing (Emergency)
-                                            </button>
-                                            <button
-                                                onClick={() => fillTestMessage('Yes, severe crushing pain')}
-                                                className="px-3 py-2 bg-red-600 text-white text-xs rounded hover:bg-red-700 text-left"
-                                                title="Severe chest pain - should trigger EMERGENCY"
-                                            >
-                                                Severe Chest Pain (Emergency)
-                                            </button>
-                                            <button
-                                                onClick={() => fillTestMessage('Yes, moderate (short of breath with activity)')}
-                                                className="px-3 py-2 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 text-left"
-                                                title="Moderate breathing - should trigger URGENT"
-                                            >
-                                                Moderate Breathing (Urgent)
-                                            </button>
-                                            <button
-                                                onClick={() => fillTestMessage('Watery diarrhea')}
-                                                className="px-3 py-2 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600 text-left"
-                                                title="GI symptoms - routine consultation"
-                                            >
-                                                Digestive Symptoms (Monitor)
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Instructions */}
-                            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h3 className="text-lg font-semibold text-blue-800 mb-2">Testing Instructions</h3>
-                                <ul className="text-sm text-blue-700 space-y-1">
-                                    <li>• Start with "symptom check" to begin triage assessment</li>
-                                    <li>• Follow the chatbot prompts to complete triage</li>
-                                    <li>• Monitor the chat for automated responses from the system</li>
-                                    <li>• Check SMS log for detailed message history</li>
-                                    <li>• Use "Clear Chat" to reset conversation and logs</li>
-                                </ul>
-                            </div>
+                            
                         </>
                     )}
                 </div>
